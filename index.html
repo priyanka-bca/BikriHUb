@@ -885,18 +885,11 @@
             deliveryCharge = existing.deliveryCharge;
           }
 
-          if (existing.status === 'DELIVERED' && existing.codCollected && status !== 'DELIVERED') {
-            if (!confirm('Order #' + existing.id + ' has COD already collected. Changing status to ' + status + ' will undo the collection record. Continue?')) {
+          if (existing.codCollected && status !== existing.status) {
+            if (!confirm('Order #' + existing.id + ' has already been marked as COD collected. Changing its status will not undo the collection record. Continue?')) {
               this.isSubmitting = false;
               return;
             }
-            existing.codCollected = false;
-            existing.codCollectedDate = null;
-          }
-
-          if (status !== 'DELIVERED' && !existing.codCollected) {
-            existing.codCollected = false;
-            existing.codCollectedDate = null;
           }
 
           var updated = {
@@ -935,19 +928,13 @@
         if (!o) return;
 
         var oldStatus = o.status;
+        if (oldStatus === newStatus) return;
 
-        if (oldStatus === 'DELIVERED' && o.codCollected && newStatus !== 'DELIVERED') {
-          if (!confirm('Order #' + o.id + ' has COD already collected (Rs. ' + Number(o.codAmount).toLocaleString() + '). Changing status to ' + newStatus + ' will undo the collection record. Continue?')) {
+        if (o.codCollected) {
+          if (!confirm('Order #' + o.id + ' has already been marked as COD collected. Changing its status will not undo the collection record. Continue?')) {
             this.renderCurrentTab();
             return;
           }
-          o.codCollected = false;
-          o.codCollectedDate = null;
-        }
-
-        if (newStatus !== 'DELIVERED' && !o.codCollected) {
-          o.codCollected = false;
-          o.codCollectedDate = null;
         }
 
         o.status = newStatus;
