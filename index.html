@@ -1,0 +1,1595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bikri Hub — Order Management for Social Sellers</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SheetJS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+  <!-- Lucide Icons (pinned to verified version with correct UMD path) -->
+  <script src="https://unpkg.com/lucide@0.394.0/dist/umd/lucide.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              500: '#16a34a',
+              600: '#15803d',
+              700: '#166534',
+              900: '#14532d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      -webkit-tap-highlight-color: transparent;
+      padding-bottom: 80px;
+    }
+    @media (min-width: 768px) {
+      body { padding-bottom: 0; }
+    }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    input[readonly] {
+      background-color: #f9fafb !important;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans antialiased min-h-screen">
+
+  <!-- TOP HEADER -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-30">
+    <div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <div class="bg-brand-600 text-white p-1.5 rounded-lg font-bold text-lg leading-none">BH</div>
+        <span class="font-bold text-gray-900 tracking-tight text-lg">Bikri Hub</span>
+        <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium border border-gray-200">v1.0</span>
+      </div>
+      <div class="flex items-center space-x-2">
+        <button onclick="app.syncGoogleSheets()" title="Sync to Google Sheets" aria-label="Sync to Google Sheets" class="p-2 text-gray-600 hover:text-brand-600 rounded-lg hover:bg-gray-100 relative">
+          <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+          <span id="sync-indicator" class="hidden absolute top-1.5 right-1.5 w-2 h-2 bg-amber-500 rounded-full"></span>
+        </button>
+        <button onclick="app.openSettingsModal()" title="Settings & Backup" aria-label="Settings & Backup" class="p-2 text-gray-600 hover:text-brand-600 rounded-lg hover:bg-gray-100">
+          <i data-lucide="settings" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-5xl mx-auto px-4 py-4">
+
+    <!-- NAVIGATION TABS (Desktop) -->
+    <div class="hidden md:flex space-x-1 border-b border-gray-200 mb-6">
+      <button onclick="app.switchTab('dashboard')" id="tab-btn-dashboard" class="px-4 py-2.5 font-medium text-sm border-b-2 border-brand-600 text-brand-600 flex items-center space-x-2">
+        <i data-lucide="layout-dashboard" class="w-4 h-4"></i><span>Dashboard</span>
+      </button>
+      <button onclick="app.switchTab('orders')" id="tab-btn-orders" class="px-4 py-2.5 font-medium text-sm border-b-2 border-transparent text-gray-500 hover:text-gray-700 flex items-center space-x-2">
+        <i data-lucide="package" class="w-4 h-4"></i><span>Orders</span>
+      </button>
+      <button onclick="app.switchTab('cod')" id="tab-btn-cod" class="px-4 py-2.5 font-medium text-sm border-b-2 border-transparent text-gray-500 hover:text-gray-700 flex items-center space-x-2">
+        <i data-lucide="banknote" class="w-4 h-4"></i><span>COD Collection</span>
+      </button>
+      <button onclick="app.switchTab('returns')" id="tab-btn-returns" class="px-4 py-2.5 font-medium text-sm border-b-2 border-transparent text-gray-500 hover:text-gray-700 flex items-center space-x-2">
+        <i data-lucide="rotate-ccw" class="w-4 h-4"></i><span>Returns</span>
+      </button>
+      <button onclick="app.switchTab('couriers')" id="tab-btn-couriers" class="px-4 py-2.5 font-medium text-sm border-b-2 border-transparent text-gray-500 hover:text-gray-700 flex items-center space-x-2">
+        <i data-lucide="truck" class="w-4 h-4"></i><span>Couriers</span>
+      </button>
+    </div>
+
+    <!-- VIEW: DASHBOARD -->
+    <section id="view-dashboard" class="space-y-6">
+      <div class="flex items-center justify-between">
+        <h1 class="text-xl font-bold text-gray-900">Overview</h1>
+        <button onclick="app.openOrderModal()" class="bg-brand-600 hover:bg-brand-700 text-white font-medium px-4 py-2 rounded-lg text-sm flex items-center space-x-1.5 shadow-sm">
+          <i data-lucide="plus" class="w-4 h-4"></i><span>New Order</span>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Delivered Revenue</div>
+          <div id="dash-delivered-revenue" class="text-xl md:text-2xl font-bold text-gray-900">Rs. 0</div>
+          <div class="text-xs text-gray-500 mt-1">Completed sales</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Est. Net Profit</div>
+          <div id="dash-net-profit" class="text-xl md:text-2xl font-bold text-emerald-600">Rs. 0</div>
+          <div class="text-xs text-gray-500 mt-1">COD − Cost − Delivery</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Uncollected COD</div>
+          <div id="dash-uncollected-cod" class="text-xl md:text-2xl font-bold text-amber-600">Rs. 0</div>
+          <div id="dash-uncollected-count" class="text-xs text-gray-500 mt-1">0 orders pending payout</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Projected Active Profit</div>
+          <div id="dash-projected-profit" class="text-xl md:text-2xl font-bold text-blue-600">Rs. 0</div>
+          <div id="dash-active-orders-count" class="text-xs text-gray-500 mt-1">0 active orders</div>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        <h2 class="text-sm font-semibold text-gray-700 mb-3">Order Status Breakdown</h2>
+        <div class="grid grid-cols-3 md:grid-cols-6 gap-2 text-center" id="dash-status-grid"></div>
+      </div>
+    </section>
+
+    <!-- VIEW: ORDERS -->
+    <section id="view-orders" class="hidden space-y-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div class="flex items-center justify-between">
+          <h1 class="text-xl font-bold text-gray-900">Orders</h1>
+          <button onclick="app.openOrderModal()" aria-label="Create new order" class="md:hidden bg-brand-600 text-white p-2 rounded-lg shadow-sm">
+            <i data-lucide="plus" class="w-5 h-5"></i>
+          </button>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <div class="relative flex-1 sm:w-64">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-gray-400"></i>
+            <input type="text" id="order-search" placeholder="Search name, phone, ID..." oninput="app.renderOrders()" class="w-full pl-9 pr-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+          <select id="order-filter-status" onchange="app.renderOrders()" class="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <option value="ALL">All Statuses</option>
+            <option value="PENDING">Pending</option>
+            <option value="PROCESSING">Processing</option>
+            <option value="DISPATCHED">Dispatched</option>
+            <option value="DELIVERED">Delivered</option>
+            <option value="RETURNED">Returned</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+        </div>
+      </div>
+      <div id="orders-list" class="space-y-3"></div>
+    </section>
+
+    <!-- VIEW: COD COLLECTION -->
+    <section id="view-cod" class="hidden space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 class="text-xl font-bold text-gray-900">COD Collection</h1>
+          <p class="text-xs text-gray-500">Track and settle cash payouts from delivered orders.</p>
+        </div>
+        <button id="batch-collect-btn" style="display:none" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg text-sm flex items-center space-x-1.5 shadow-sm">
+          <i data-lucide="check-check" class="w-4 h-4"></i>
+          <span id="batch-collect-label">Collect Selected (0)</span>
+        </button>
+      </div>
+      <div id="cod-list" class="space-y-3"></div>
+    </section>
+
+    <!-- VIEW: RETURNS -->
+    <section id="view-returns" class="hidden space-y-4">
+      <div>
+        <h1 class="text-xl font-bold text-gray-900">Returned Orders</h1>
+        <p class="text-xs text-gray-500">Track returned items and verify physical receipt to your inventory.</p>
+      </div>
+      <div id="returns-alert" class="p-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 flex items-start space-x-3">
+        <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"></i>
+        <div>
+          <div class="font-semibold text-sm">Missing Physical Parcels: <span id="returns-missing-count">0</span></div>
+          <p class="text-xs text-amber-700 mt-0.5">Orders marked as Returned but not yet confirmed received back.</p>
+        </div>
+      </div>
+      <div id="returns-list" class="space-y-3"></div>
+    </section>
+
+    <!-- VIEW: COURIERS -->
+    <section id="view-couriers" class="hidden space-y-4">
+      <div>
+        <h1 class="text-xl font-bold text-gray-900">Courier Performance</h1>
+        <p class="text-xs text-gray-500">Calculated strictly as Delivered ÷ (Delivered + Returned).</p>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-gray-50 text-gray-600 font-medium border-b border-gray-200">
+              <tr>
+                <th class="p-3">Courier Name</th>
+                <th class="p-3 text-center">Delivered</th>
+                <th class="p-3 text-center">Returned</th>
+                <th class="p-3 text-center">Success Rate</th>
+              </tr>
+            </thead>
+            <tbody id="couriers-table-body" class="divide-y divide-gray-100"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- MOBILE BOTTOM NAVIGATION BAR -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30 px-2 py-1.5 flex justify-around items-center" aria-label="Main navigation">
+    <button onclick="app.switchTab('dashboard')" id="mnav-dashboard" class="flex flex-col items-center p-1 text-brand-600" aria-label="Dashboard">
+      <i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="text-[10px] font-medium mt-0.5">Home</span>
+    </button>
+    <button onclick="app.switchTab('orders')" id="mnav-orders" class="flex flex-col items-center p-1 text-gray-500" aria-label="Orders">
+      <i data-lucide="package" class="w-5 h-5"></i><span class="text-[10px] font-medium mt-0.5">Orders</span>
+    </button>
+    <button onclick="app.switchTab('cod')" id="mnav-cod" class="flex flex-col items-center p-1 text-gray-500" aria-label="COD Collection">
+      <i data-lucide="banknote" class="w-5 h-5"></i><span class="text-[10px] font-medium mt-0.5">COD</span>
+    </button>
+    <button onclick="app.switchTab('returns')" id="mnav-returns" class="flex flex-col items-center p-1 text-gray-500" aria-label="Returns">
+      <i data-lucide="rotate-ccw" class="w-5 h-5"></i><span class="text-[10px] font-medium mt-0.5">Returns</span>
+    </button>
+    <button onclick="app.switchTab('couriers')" id="mnav-couriers" class="flex flex-col items-center p-1 text-gray-500" aria-label="Couriers">
+      <i data-lucide="truck" class="w-5 h-5"></i><span class="text-[10px] font-medium mt-0.5">Couriers</span>
+    </button>
+  </nav>
+
+  <!-- MODAL: ORDER FORM (Create / Edit) -->
+  <div id="modal-order" class="hidden fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="modal-order-title">
+    <div class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-xl overflow-hidden">
+      <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+        <h2 id="modal-order-title" class="font-bold text-gray-900 text-base">New Order</h2>
+        <button onclick="app.closeOrderModal()" class="text-gray-400 hover:text-gray-600 p-1" aria-label="Close order form">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="order-form" onsubmit="app.handleOrderSubmit(event)" class="p-4 space-y-3 overflow-y-auto flex-1">
+        <input type="hidden" id="form-order-id">
+
+        <div id="form-financial-lock-note" class="hidden text-xs text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
+          <strong>Financial fields locked:</strong> COD has been collected for this order. COD Amount, Item Cost, and Delivery Cost cannot be changed.
+        </div>
+
+        <div>
+          <label for="form-customer-name" class="block text-xs font-semibold text-gray-700 mb-1">Customer Name *</label>
+          <input type="text" id="form-customer-name" required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label for="form-phone" class="block text-xs font-semibold text-gray-700 mb-1">Phone Number *</label>
+            <input type="text" id="form-phone" required placeholder="98XXXXXXXX" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+            <div id="form-phone-error" class="hidden text-xs text-red-600 mt-0.5"></div>
+          </div>
+          <div>
+            <label for="form-courier" class="block text-xs font-semibold text-gray-700 mb-1">Courier Service</label>
+            <input type="text" id="form-courier" placeholder="Pathao, Upaya..." class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+          </div>
+        </div>
+
+        <div>
+          <label for="form-address" class="block text-xs font-semibold text-gray-700 mb-1">Delivery Address *</label>
+          <textarea id="form-address" rows="2" required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"></textarea>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label for="form-cod" class="block text-xs font-semibold text-gray-700 mb-1">COD Amount (Rs) *</label>
+            <input type="number" id="form-cod" min="0" required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+          </div>
+          <div>
+            <label for="form-cost" class="block text-xs font-semibold text-gray-700 mb-1">Item Cost (Rs)</label>
+            <input type="number" id="form-cost" min="0" value="0" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+          </div>
+          <div>
+            <label for="form-delivery" class="block text-xs font-semibold text-gray-700 mb-1">Delivery Cost (Rs)</label>
+            <input type="number" id="form-delivery" min="0" value="0" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label for="form-tracking" class="block text-xs font-semibold text-gray-700 mb-1">Tracking ID</label>
+            <input type="text" id="form-tracking" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+          </div>
+          <div>
+            <label for="form-status" class="block text-xs font-semibold text-gray-700 mb-1">Status</label>
+            <select id="form-status" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none bg-white">
+              <option value="PENDING">Pending</option>
+              <option value="PROCESSING">Processing</option>
+              <option value="DISPATCHED">Dispatched</option>
+              <option value="DELIVERED">Delivered</option>
+              <option value="RETURNED">Returned</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="pt-2 flex justify-end space-x-2">
+          <button type="button" onclick="app.closeOrderModal()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium">Cancel</button>
+          <button type="submit" id="form-submit-btn" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium">Save Order</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: SETTINGS & BACKUP -->
+  <div id="modal-settings" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Settings and Data Management">
+    <div class="bg-white w-full max-w-md rounded-2xl p-5 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-gray-200 pb-3">
+        <h2 class="font-bold text-gray-900">Settings & Data Management</h2>
+        <button onclick="app.closeSettingsModal()" class="text-gray-400 hover:text-gray-600" aria-label="Close settings">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Google Sheets Config -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <label for="setting-gsheet-url" class="block text-xs font-semibold text-gray-700">Google Sheets Backup</label>
+          <!-- Connection status indicator -->
+          <div id="gsheet-status" class="flex items-center space-x-1.5">
+            <span id="gsheet-status-dot" class="w-2 h-2 rounded-full bg-gray-400"></span>
+            <span id="gsheet-status-text" class="text-[10px] text-gray-500">Not configured</span>
+          </div>
+        </div>
+        <input type="url" id="setting-gsheet-url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+        <p class="text-[10px] text-gray-500">Your orders are also backed up to your Google Sheet, so they are not dependent only on this browser/device. You remain responsible for your Google account.</p>
+
+        <!-- Setup instructions -->
+        <details class="text-[10px] text-gray-500 mt-1">
+          <summary class="cursor-pointer font-semibold text-gray-600 hover:text-gray-800">How to set up Google Sheets backup</summary>
+          <ol class="list-decimal ml-4 mt-1.5 space-y-1 text-gray-600 leading-relaxed">
+            <li>Open <strong>Google Sheets</strong> and create a new spreadsheet (e.g., "Bikri Hub Orders")</li>
+            <li>Go to <strong>Extensions → Apps Script</strong></li>
+            <li>Delete any existing code in <code>Code.gs</code></li>
+            <li>Paste the <strong>Bikri Hub Apps Script</strong> code (provided separately)</li>
+            <li>Click <strong>Deploy → New deployment</strong></li>
+            <li>Select type: <strong>Web app</strong></li>
+            <li>Set "Execute as": <strong>Me</strong></li>
+            <li>Set "Who has access": <strong>Anyone</strong></li>
+            <li>Click <strong>Deploy</strong> and authorize when prompted</li>
+            <li>Copy the <strong>Web App URL</strong> and paste it above</li>
+            <li>Click <strong>Save Settings</strong> — Bikri Hub will offer to push existing orders</li>
+          </ol>
+        </details>
+
+        <!-- Google Sheets actions -->
+        <div class="grid grid-cols-2 gap-2 mt-2">
+          <button onclick="app.pushAllOrders()" class="px-3 py-2 border border-gray-300 text-gray-700 text-xs rounded-lg font-medium hover:bg-gray-50 flex items-center justify-center space-x-1">
+            <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+            <span>Push All to Sheets</span>
+          </button>
+          <button onclick="app.restoreFromSheets()" class="px-3 py-2 border border-gray-300 text-gray-700 text-xs rounded-lg font-medium hover:bg-gray-50 flex items-center justify-center space-x-1">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            <span>Restore from Sheets</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Local Backup Actions -->
+      <div class="pt-2 border-t border-gray-200 space-y-2">
+        <div class="text-xs font-semibold text-gray-700">Local Order Data Backup</div>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="app.exportJSON()" class="px-3 py-2 border border-gray-300 text-gray-700 text-xs rounded-lg font-medium hover:bg-gray-50 flex items-center justify-center space-x-1">
+            <i data-lucide="hard-drive" class="w-3.5 h-3.5"></i><span>Export JSON</span>
+          </button>
+          <button onclick="app.exportExcel()" class="px-3 py-2 border border-gray-300 text-gray-700 text-xs rounded-lg font-medium hover:bg-gray-50 flex items-center justify-center space-x-1">
+            <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i><span>Export Excel</span>
+          </button>
+        </div>
+
+        <!-- Restore JSON -->
+        <div class="pt-2">
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Restore from JSON Backup</label>
+          <div class="flex space-x-2">
+            <select id="restore-mode" class="text-xs border border-gray-300 rounded-lg px-2 py-1 bg-white">
+              <option value="REPLACE">Replace All</option>
+              <option value="MERGE">Merge</option>
+            </select>
+            <input type="file" id="restore-file" accept=".json" class="hidden" onchange="app.handleRestoreJSON(event)">
+            <button onclick="document.getElementById('restore-file').click()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs px-3 py-1.5 rounded-lg font-medium border border-gray-200">
+              Select Backup File
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Danger Zone -->
+      <div class="pt-3 border-t border-gray-200">
+        <button onclick="app.clearAllData()" class="w-full py-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          <span>Clear All Orders &amp; Sync Queue</span>
+        </button>
+      </div>
+
+      <div class="pt-2 flex justify-end">
+        <button onclick="app.saveSettings()" class="px-4 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-semibold">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toast-container" class="fixed top-16 right-4 z-50 space-y-2 pointer-events-none" aria-live="polite"></div>
+
+  <!-- APP ENGINE LOGIC -->
+  <script>
+    /**
+     * BIKRI HUB v1.0 — FINAL PRODUCTION BUILD
+     * Order Management for Nepali Social-Commerce Sellers
+     *
+     * Architecture:
+     *   Bikri Hub → Local Storage (fast daily use)
+     *             → Google Apps Script → Google Sheet (persistent cloud backup)
+     */
+    const STORAGE_KEY_ORDERS = 'bikri_hub_orders_v1';
+    const STORAGE_KEY_SYNC_QUEUE = 'bikri_hub_sync_queue_v2'; // v2: new action-based format
+    const STORAGE_KEY_SETTINGS = 'bikri_hub_settings_v1';
+
+    const STATUSES = ['PENDING', 'PROCESSING', 'DISPATCHED', 'DELIVERED', 'RETURNED', 'CANCELLED'];
+
+    // ── Utility: HTML Escaping ──
+    function escapeHtml(str) {
+      if (str == null) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // ── CSV field escaping (RFC 4180) ──
+    function escapeCSVField(value) {
+      var str = String(value == null ? '' : value);
+      if (str.indexOf(',') !== -1 || str.indexOf('"') !== -1 || str.indexOf('\n') !== -1 || str.indexOf('\r') !== -1) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
+    }
+
+    // ── Collision-resistant Order ID ──
+    var _orderSeqCounter = Math.floor(Math.random() * 1000);
+    function generateOrderId() {
+      var now = new Date();
+      var pad = function(n, len) { return String(n).padStart(len || 2, '0'); };
+      var datePart = '' + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate());
+      var timePart = '' + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds());
+      _orderSeqCounter = (_orderSeqCounter + 1) % 46656;
+      var seq = _orderSeqCounter.toString(36).toUpperCase().padStart(3, '0');
+      var rand = Math.random().toString(36).substring(2, 5).toUpperCase().padEnd(3, '0');
+      return 'ORD-' + datePart + '-' + timePart + '-' + seq + rand;
+    }
+
+    // ── Phone validation for Nepal mobile ──
+    function validatePhone(phone) {
+      var cleaned = String(phone || '').replace(/[\s\-\(\)\.]/g, '');
+      if (cleaned.startsWith('+977')) cleaned = cleaned.substring(4);
+      else if (cleaned.startsWith('977') && cleaned.length === 13) cleaned = cleaned.substring(3);
+      if (!/^\d{10}$/.test(cleaned)) {
+        return { valid: false, error: 'Enter a valid 10-digit mobile number (e.g., 98XXXXXXXX)' };
+      }
+      if (!cleaned.startsWith('9')) {
+        return { valid: false, error: 'Nepal mobile numbers start with 9' };
+      }
+      return { valid: true, normalized: cleaned };
+    }
+
+    // ── Build WhatsApp-ready phone number ──
+    function getWhatsAppNumber(phone) {
+      var cleaned = String(phone || '').replace(/[\s\-\(\)\.+]/g, '');
+      if (cleaned.startsWith('977') && cleaned.length === 13) return cleaned;
+      if (cleaned.length === 10 && cleaned.startsWith('9')) return '977' + cleaned;
+      return cleaned;
+    }
+
+    // ── Validate a single order object for import ──
+    function validateOrderForImport(o) {
+      if (!o || typeof o !== 'object') return null;
+      if (typeof o.id !== 'string' || !o.id.trim()) return null;
+      if (typeof o.customerName !== 'string' || !o.customerName.trim()) return null;
+      if (typeof o.phone !== 'string' || !o.phone.trim()) return null;
+      if (typeof o.address !== 'string' || !o.address.trim()) return null;
+      var codAmount = Number(o.codAmount);
+      var costPrice = Number(o.costPrice);
+      var deliveryCharge = Number(o.deliveryCharge);
+      if (!isFinite(codAmount) || codAmount < 0) return null;
+      if (!isFinite(costPrice) || costPrice < 0) return null;
+      if (!isFinite(deliveryCharge) || deliveryCharge < 0) return null;
+      if (!STATUSES.includes(o.status)) return null;
+      if (typeof o.createdAt !== 'string' || isNaN(Date.parse(o.createdAt))) return null;
+      return {
+        id: o.id.trim(),
+        customerName: o.customerName.trim(),
+        phone: o.phone.trim(),
+        address: o.address.trim(),
+        codAmount: codAmount,
+        costPrice: costPrice,
+        deliveryCharge: deliveryCharge,
+        courier: typeof o.courier === 'string' ? o.courier.trim() : '',
+        trackingId: typeof o.trackingId === 'string' ? o.trackingId.trim() : '',
+        status: o.status,
+        codCollected: !!o.codCollected,
+        codCollectedDate: (typeof o.codCollectedDate === 'string' && o.codCollectedDate) ? o.codCollectedDate : null,
+        returnReceived: !!o.returnReceived,
+        createdAt: o.createdAt,
+        updatedAt: (typeof o.updatedAt === 'string' && !isNaN(Date.parse(o.updatedAt))) ? o.updatedAt : o.createdAt
+      };
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    //  BIKRI HUB APPLICATION CLASS
+    // ═══════════════════════════════════════════════════
+    class BikriHubApp {
+      constructor() {
+        this.orders = [];
+        this.syncQueue = [];    // Array of { action: 'upsert'|'delete', orderId: string, data: object|null }
+        this.settings = { googleSheetUrl: '' };
+        this.currentTab = 'dashboard';
+        this.selectedCodOrders = new Set();
+        this.isSubmitting = false;
+        this.isSyncing = false;
+
+        this.init();
+      }
+
+      init() {
+        this.loadLocalData();
+        this.setupEventListeners();
+        this.switchTab('dashboard');
+        lucide.createIcons();
+      }
+
+      // ── Data Persistence ──
+      loadLocalData() {
+        try {
+          var loadedOrders = localStorage.getItem(STORAGE_KEY_ORDERS);
+          this.orders = loadedOrders ? JSON.parse(loadedOrders) : [];
+          if (!Array.isArray(this.orders)) this.orders = [];
+
+          var loadedQueue = localStorage.getItem(STORAGE_KEY_SYNC_QUEUE);
+          this.syncQueue = loadedQueue ? JSON.parse(loadedQueue) : [];
+          if (!Array.isArray(this.syncQueue)) this.syncQueue = [];
+
+          // Migrate old v1 sync queue format (bare order objects) → new v2 format
+          this.syncQueue = this.syncQueue.map(function(item) {
+            if (item && item.action && item.orderId) return item; // Already v2
+            // Old format: raw order object with .id
+            if (item && item.id) {
+              return { action: 'upsert', orderId: item.id, data: item };
+            }
+            return null;
+          }).filter(Boolean);
+
+          var loadedSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
+          this.settings = loadedSettings ? JSON.parse(loadedSettings) : { googleSheetUrl: '' };
+        } catch (e) {
+          console.error('Data loading error:', e);
+          this.orders = [];
+          this.syncQueue = [];
+        }
+        this.updateSyncIndicator();
+      }
+
+      saveData() {
+        try {
+          localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(this.orders));
+          localStorage.setItem(STORAGE_KEY_SYNC_QUEUE, JSON.stringify(this.syncQueue));
+          localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(this.settings));
+        } catch (e) {
+          this.showToast('Storage error — data may not have saved', 'error');
+        }
+        this.updateSyncIndicator();
+      }
+
+      updateSyncIndicator() {
+        var ind = document.getElementById('sync-indicator');
+        if (ind) {
+          ind.classList.toggle('hidden', this.syncQueue.length === 0);
+        }
+      }
+
+      showToast(message, type) {
+        type = type || 'info';
+        var container = document.getElementById('toast-container');
+        if (!container) return;
+        var toast = document.createElement('div');
+        var bgClass = type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-emerald-600' : 'bg-gray-800';
+        toast.className = 'pointer-events-auto px-4 py-2.5 rounded-lg shadow-lg text-xs font-medium text-white transition-all transform duration-200 ' + bgClass;
+        toast.textContent = message;
+        container.appendChild(toast);
+        setTimeout(function() {
+          toast.style.opacity = '0';
+          setTimeout(function() { toast.remove(); }, 200);
+        }, 3000);
+      }
+
+      // ── Tab Navigation ──
+      switchTab(tabName) {
+        this.currentTab = tabName;
+        var tabs = ['dashboard', 'orders', 'cod', 'returns', 'couriers'];
+        for (var i = 0; i < tabs.length; i++) {
+          var tab = tabs[i];
+          var view = document.getElementById('view-' + tab);
+          var btn = document.getElementById('tab-btn-' + tab);
+          var mbtn = document.getElementById('mnav-' + tab);
+          if (view) view.classList.toggle('hidden', tab !== tabName);
+          if (btn) {
+            btn.className = tab === tabName
+              ? 'px-4 py-2.5 font-medium text-sm border-b-2 border-brand-600 text-brand-600 flex items-center space-x-2'
+              : 'px-4 py-2.5 font-medium text-sm border-b-2 border-transparent text-gray-500 hover:text-gray-700 flex items-center space-x-2';
+          }
+          if (mbtn) {
+            mbtn.className = tab === tabName
+              ? 'flex flex-col items-center p-1 text-brand-600'
+              : 'flex flex-col items-center p-1 text-gray-500';
+          }
+        }
+        this.renderCurrentTab();
+      }
+
+      renderCurrentTab() {
+        switch (this.currentTab) {
+          case 'dashboard': this.renderDashboard(); break;
+          case 'orders':    this.renderOrders(); break;
+          case 'cod':       this.renderCOD(); break;
+          case 'returns':   this.renderReturns(); break;
+          case 'couriers':  this.renderCouriers(); break;
+        }
+        lucide.createIcons();
+      }
+
+      // ═══════════════════════
+      //  DASHBOARD
+      // ═══════════════════════
+      renderDashboard() {
+        var deliveredRevenue = 0, netProfit = 0, uncollectedCod = 0;
+        var uncollectedCount = 0, activeProjectedProfit = 0, activeCount = 0;
+        var counts = { PENDING: 0, PROCESSING: 0, DISPATCHED: 0, DELIVERED: 0, RETURNED: 0, CANCELLED: 0 };
+
+        for (var i = 0; i < this.orders.length; i++) {
+          var o = this.orders[i];
+          if (counts[o.status] !== undefined) counts[o.status]++;
+          var cod = Number(o.codAmount) || 0;
+          var cost = Number(o.costPrice) || 0;
+          var delivery = Number(o.deliveryCharge) || 0;
+
+          if (o.status === 'DELIVERED') {
+            deliveredRevenue += cod;
+            netProfit += (cod - cost - delivery);
+            if (!o.codCollected) { uncollectedCod += cod; uncollectedCount++; }
+          } else if (o.status === 'RETURNED') {
+            netProfit -= delivery;
+          } else if (o.status === 'PENDING' || o.status === 'PROCESSING' || o.status === 'DISPATCHED') {
+            activeProjectedProfit += (cod - cost - delivery);
+            activeCount++;
+          }
+        }
+
+        document.getElementById('dash-delivered-revenue').textContent = 'Rs. ' + deliveredRevenue.toLocaleString();
+        document.getElementById('dash-net-profit').textContent = 'Rs. ' + netProfit.toLocaleString();
+        document.getElementById('dash-uncollected-cod').textContent = 'Rs. ' + uncollectedCod.toLocaleString();
+        document.getElementById('dash-uncollected-count').textContent = uncollectedCount + ' orders pending payout';
+        document.getElementById('dash-projected-profit').textContent = 'Rs. ' + activeProjectedProfit.toLocaleString();
+        document.getElementById('dash-active-orders-count').textContent = activeCount + ' active orders';
+
+        var grid = document.getElementById('dash-status-grid');
+        grid.innerHTML = STATUSES.map(function(st) {
+          return '<div class="bg-gray-50 border border-gray-100 p-2 rounded-lg">' +
+            '<div class="text-[10px] font-semibold text-gray-500">' + st + '</div>' +
+            '<div class="text-lg font-bold text-gray-800">' + counts[st] + '</div></div>';
+        }).join('');
+      }
+
+      // ═══════════════════════
+      //  ORDER MANAGEMENT
+      // ═══════════════════════
+      renderOrders() {
+        var container = document.getElementById('orders-list');
+        var query = (document.getElementById('order-search').value || '').toLowerCase().trim();
+        var statusFilter = document.getElementById('order-filter-status').value;
+
+        var filtered = this.orders.filter(function(o) {
+          var matchQuery = !query ||
+            (o.id && o.id.toLowerCase().includes(query)) ||
+            (o.customerName && o.customerName.toLowerCase().includes(query)) ||
+            (o.phone && o.phone.includes(query)) ||
+            (o.trackingId && o.trackingId.toLowerCase().includes(query));
+          var matchStatus = statusFilter === 'ALL' || o.status === statusFilter;
+          return matchQuery && matchStatus;
+        });
+
+        filtered.sort(function(a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+
+        if (filtered.length === 0) {
+          container.innerHTML = '<div class="text-center py-8 text-gray-400 text-sm">No orders found.</div>';
+          return;
+        }
+
+        var self = this;
+        container.innerHTML = filtered.map(function(o) { return self.buildOrderCardHtml(o); }).join('');
+        lucide.createIcons();
+      }
+
+      buildOrderCardHtml(o) {
+        var statusColors = {
+          PENDING: 'bg-yellow-100 text-yellow-800',
+          PROCESSING: 'bg-blue-100 text-blue-800',
+          DISPATCHED: 'bg-purple-100 text-purple-800',
+          DELIVERED: 'bg-emerald-100 text-emerald-800',
+          RETURNED: 'bg-red-100 text-red-800',
+          CANCELLED: 'bg-gray-100 text-gray-800'
+        };
+
+        var waMsg = this.getWhatsAppMessage(o);
+        var waPhone = getWhatsAppNumber(o.phone);
+        var waUrl = 'https://wa.me/' + waPhone + '?text=' + encodeURIComponent(waMsg);
+        var eid = escapeHtml(o.id);
+
+        var statusOptions = STATUSES.map(function(s) {
+          return '<option value="' + s + '"' + (o.status === s ? ' selected' : '') + '>' + s + '</option>';
+        }).join('');
+
+        return '<div class="bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm">' +
+          '<div class="flex items-start justify-between">' +
+            '<div>' +
+              '<div class="flex items-center space-x-2">' +
+                '<span class="font-bold text-gray-900 text-sm">#' + eid + '</span>' +
+                '<span class="text-xs px-2 py-0.5 rounded-full font-semibold ' + (statusColors[o.status] || 'bg-gray-100') + '">' + escapeHtml(o.status) + '</span>' +
+              '</div>' +
+              '<div class="text-sm font-medium text-gray-800 mt-0.5">' + escapeHtml(o.customerName) + ' — ' + escapeHtml(o.phone) + '</div>' +
+            '</div>' +
+            '<div class="text-right">' +
+              '<div class="text-base font-bold text-gray-900">Rs. ' + Number(o.codAmount).toLocaleString() + '</div>' +
+              '<div class="text-[10px] text-gray-400">' + new Date(o.createdAt).toLocaleDateString() + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="text-xs text-gray-600 bg-gray-50 p-2 rounded-lg">' +
+            '<div><span class="font-medium text-gray-500">Address:</span> ' + escapeHtml(o.address) + '</div>' +
+            '<div class="mt-1 flex justify-between">' +
+              '<span><span class="font-medium text-gray-500">Courier:</span> ' + escapeHtml(o.courier || '—') + '</span>' +
+              '<span><span class="font-medium text-gray-500">Tracking:</span> ' + escapeHtml(o.trackingId || '—') + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="flex items-center justify-between pt-1">' +
+            '<div class="flex items-center space-x-1">' +
+              '<a href="' + waUrl + '" target="_blank" rel="noopener" class="text-emerald-600 hover:bg-emerald-50 px-2 py-1 rounded text-xs font-semibold flex items-center space-x-1 border border-emerald-200">' +
+                '<i data-lucide="message-square" class="w-3.5 h-3.5"></i><span>WhatsApp</span>' +
+              '</a>' +
+            '</div>' +
+            '<div class="flex items-center space-x-2">' +
+              '<select data-action="change-status" data-order-id="' + eid + '" class="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:ring-1 focus:ring-brand-500">' +
+                statusOptions +
+              '</select>' +
+              '<button data-action="edit-order" data-order-id="' + eid + '" class="text-gray-500 hover:text-brand-600 p-1" title="Edit order" aria-label="Edit order #' + eid + '">' +
+                '<i data-lucide="edit-2" class="w-4 h-4"></i>' +
+              '</button>' +
+              '<button data-action="delete-order" data-order-id="' + eid + '" class="text-gray-400 hover:text-red-600 p-1" title="Delete order" aria-label="Delete order #' + eid + '">' +
+                '<i data-lucide="trash" class="w-4 h-4"></i>' +
+              '</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }
+
+      getWhatsAppMessage(o) {
+        switch (o.status) {
+          case 'PENDING':
+          case 'PROCESSING':
+            return 'Hello ' + o.customerName + ', thank you for your order (' + o.id + ') with Bikri Hub! We are processing your parcel. Total COD: Rs. ' + o.codAmount + '.';
+          case 'DISPATCHED':
+            return 'Hello ' + o.customerName + ', your order (' + o.id + ') has been dispatched via ' + (o.courier || 'our courier') + '. Tracking ID: ' + (o.trackingId || 'N/A') + '. Please keep Rs. ' + o.codAmount + ' ready.';
+          case 'DELIVERED':
+            return 'Hello ' + o.customerName + ', your parcel (' + o.id + ') has been delivered! Thank you for buying with us.';
+          case 'RETURNED':
+            return 'Hello ' + o.customerName + ', your order (' + o.id + ') was marked as returned. Please contact us if you have questions.';
+          default:
+            return 'Hello ' + o.customerName + ', update regarding your order (' + o.id + '). Current status: ' + o.status + '.';
+        }
+      }
+
+      // ── Order Modal ──
+      openOrderModal(orderId) {
+        var modal = document.getElementById('modal-order');
+        var form = document.getElementById('order-form');
+        form.reset();
+
+        var codField = document.getElementById('form-cod');
+        var costField = document.getElementById('form-cost');
+        var deliveryField = document.getElementById('form-delivery');
+        var lockNote = document.getElementById('form-financial-lock-note');
+        var phoneError = document.getElementById('form-phone-error');
+
+        codField.readOnly = false;
+        costField.readOnly = false;
+        deliveryField.readOnly = false;
+        lockNote.classList.add('hidden');
+        phoneError.classList.add('hidden');
+
+        if (orderId) {
+          var o = this.orders.find(function(item) { return item.id === orderId; });
+          if (o) {
+            document.getElementById('modal-order-title').textContent = 'Edit Order #' + o.id;
+            document.getElementById('form-order-id').value = o.id;
+            document.getElementById('form-customer-name').value = o.customerName || '';
+            document.getElementById('form-phone').value = o.phone || '';
+            document.getElementById('form-courier').value = o.courier || '';
+            document.getElementById('form-address').value = o.address || '';
+            codField.value = o.codAmount || 0;
+            costField.value = o.costPrice || 0;
+            deliveryField.value = o.deliveryCharge || 0;
+            document.getElementById('form-tracking').value = o.trackingId || '';
+            document.getElementById('form-status').value = o.status || 'PENDING';
+
+            if (o.codCollected) {
+              codField.readOnly = true;
+              costField.readOnly = true;
+              deliveryField.readOnly = true;
+              lockNote.classList.remove('hidden');
+            }
+          }
+        } else {
+          document.getElementById('modal-order-title').textContent = 'New Order';
+          document.getElementById('form-order-id').value = '';
+        }
+
+        modal.classList.remove('hidden');
+        lucide.createIcons();
+      }
+
+      closeOrderModal() {
+        document.getElementById('modal-order').classList.add('hidden');
+      }
+
+      handleOrderSubmit(e) {
+        e.preventDefault();
+        if (this.isSubmitting) return;
+        this.isSubmitting = true;
+
+        var id = document.getElementById('form-order-id').value;
+        var customerName = document.getElementById('form-customer-name').value.trim();
+        var phone = document.getElementById('form-phone').value.trim();
+        var courier = document.getElementById('form-courier').value.trim();
+        var address = document.getElementById('form-address').value.trim();
+        var codAmount = parseFloat(document.getElementById('form-cod').value) || 0;
+        var costPrice = parseFloat(document.getElementById('form-cost').value) || 0;
+        var deliveryCharge = parseFloat(document.getElementById('form-delivery').value) || 0;
+        var trackingId = document.getElementById('form-tracking').value.trim();
+        var status = document.getElementById('form-status').value;
+        var now = new Date().toISOString();
+
+        var phoneResult = validatePhone(phone);
+        var phoneError = document.getElementById('form-phone-error');
+        if (!phoneResult.valid) {
+          phoneError.textContent = phoneResult.error;
+          phoneError.classList.remove('hidden');
+          this.isSubmitting = false;
+          return;
+        }
+        phoneError.classList.add('hidden');
+        phone = phoneResult.normalized;
+
+        if (id) {
+          // ── EDIT existing order ──
+          var index = this.orders.findIndex(function(o) { return o.id === id; });
+          if (index === -1) {
+            this.isSubmitting = false;
+            this.showToast('Order not found — it may have been deleted', 'error');
+            return;
+          }
+          var existing = this.orders[index];
+
+          if (existing.codCollected) {
+            codAmount = existing.codAmount;
+            costPrice = existing.costPrice;
+            deliveryCharge = existing.deliveryCharge;
+          }
+
+          if (existing.status === 'DELIVERED' && existing.codCollected && status !== 'DELIVERED') {
+            if (!confirm('Order #' + existing.id + ' has COD already collected. Changing status to ' + status + ' will undo the collection record. Continue?')) {
+              this.isSubmitting = false;
+              return;
+            }
+            existing.codCollected = false;
+            existing.codCollectedDate = null;
+          }
+
+          if (status !== 'DELIVERED' && !existing.codCollected) {
+            existing.codCollected = false;
+            existing.codCollectedDate = null;
+          }
+
+          var updated = {
+            id: existing.id, customerName: customerName, phone: phone, courier: courier,
+            address: address, codAmount: codAmount, costPrice: costPrice, deliveryCharge: deliveryCharge,
+            trackingId: trackingId, status: status, codCollected: existing.codCollected,
+            codCollectedDate: existing.codCollectedDate, returnReceived: existing.returnReceived,
+            createdAt: existing.createdAt, updatedAt: now
+          };
+
+          this.orders[index] = updated;
+          this.queueSync(updated);
+          this.showToast('Order updated successfully', 'success');
+        } else {
+          // ── CREATE new order ──
+          var newOrder = {
+            id: generateOrderId(), customerName: customerName, phone: phone, courier: courier,
+            address: address, codAmount: codAmount, costPrice: costPrice, deliveryCharge: deliveryCharge,
+            trackingId: trackingId, status: status, codCollected: false, codCollectedDate: null,
+            returnReceived: false, createdAt: now, updatedAt: now
+          };
+          this.orders.push(newOrder);
+          this.queueSync(newOrder);
+          this.showToast('New order created', 'success');
+        }
+
+        this.saveData();
+        this.closeOrderModal();
+        this.renderCurrentTab();
+        this.isSubmitting = false;
+      }
+
+      changeOrderStatus(orderId, newStatus) {
+        if (!STATUSES.includes(newStatus)) return;
+        var o = this.orders.find(function(item) { return item.id === orderId; });
+        if (!o) return;
+
+        var oldStatus = o.status;
+
+        if (oldStatus === 'DELIVERED' && o.codCollected && newStatus !== 'DELIVERED') {
+          if (!confirm('Order #' + o.id + ' has COD already collected (Rs. ' + Number(o.codAmount).toLocaleString() + '). Changing status to ' + newStatus + ' will undo the collection record. Continue?')) {
+            this.renderCurrentTab();
+            return;
+          }
+          o.codCollected = false;
+          o.codCollectedDate = null;
+        }
+
+        if (newStatus !== 'DELIVERED' && !o.codCollected) {
+          o.codCollected = false;
+          o.codCollectedDate = null;
+        }
+
+        o.status = newStatus;
+        o.updatedAt = new Date().toISOString();
+
+        this.queueSync(o);
+        this.saveData();
+        this.renderCurrentTab();
+        this.showToast('Order status updated to ' + newStatus, 'info');
+      }
+
+      deleteOrder(orderId) {
+        if (!confirm('Are you sure you want to delete order #' + orderId + '?')) return;
+        this.orders = this.orders.filter(function(o) { return o.id !== orderId; });
+        // Queue delete for Google Sheets (replaces any pending upsert for this ID)
+        this.queueDelete(orderId);
+        this.saveData();
+        this.renderCurrentTab();
+        this.showToast('Order deleted', 'info');
+      }
+
+      // ═══════════════════════
+      //  COD COLLECTION
+      // ═══════════════════════
+      renderCOD() {
+        var container = document.getElementById('cod-list');
+        var batchBtn = document.getElementById('batch-collect-btn');
+        var eligible = this.orders.filter(function(o) { return o.status === 'DELIVERED' && !o.codCollected; });
+
+        // Clean stale selections (orders deleted, status changed, or already collected)
+        var eligibleIds = new Set(eligible.map(function(o) { return o.id; }));
+        var self = this;
+        this.selectedCodOrders.forEach(function(id) {
+          if (!eligibleIds.has(id)) self.selectedCodOrders.delete(id);
+        });
+
+        if (eligible.length === 0) {
+          container.innerHTML = '<div class="text-center py-8 text-gray-400 text-sm">No uncollected COD orders.</div>';
+          batchBtn.style.display = 'none';
+          return;
+        }
+
+        batchBtn.style.display = '';
+        this.updateBatchCollectLabel();
+
+        var self = this;
+        container.innerHTML = eligible.map(function(o) {
+          var eid = escapeHtml(o.id);
+          return '<div class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between shadow-sm">' +
+            '<div class="flex items-center space-x-3">' +
+              '<input type="checkbox" ' + (self.selectedCodOrders.has(o.id) ? 'checked' : '') + ' data-action="toggle-cod" data-order-id="' + eid + '" class="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500">' +
+              '<div>' +
+                '<div class="font-bold text-sm text-gray-900">#' + eid + ' — ' + escapeHtml(o.customerName) + '</div>' +
+                '<div class="text-xs text-gray-500">' + escapeHtml(o.courier || 'Direct') + ' | Delivered</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="flex items-center space-x-3">' +
+              '<div class="text-right"><div class="font-bold text-gray-900 text-sm">Rs. ' + Number(o.codAmount).toLocaleString() + '</div></div>' +
+              '<button data-action="collect-cod" data-order-id="' + eid + '" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs border border-emerald-200 rounded-lg">Mark Collected</button>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+      }
+
+      toggleSelectCOD(orderId) {
+        if (this.selectedCodOrders.has(orderId)) this.selectedCodOrders.delete(orderId);
+        else this.selectedCodOrders.add(orderId);
+        this.updateBatchCollectLabel();
+      }
+
+      updateBatchCollectLabel() {
+        var label = document.getElementById('batch-collect-label');
+        if (label) label.textContent = 'Collect Selected (' + this.selectedCodOrders.size + ')';
+      }
+
+      collectCOD(orderId) {
+        var o = this.orders.find(function(item) { return item.id === orderId; });
+        if (o && o.status === 'DELIVERED') {
+          o.codCollected = true;
+          o.codCollectedDate = new Date().toISOString();
+          o.updatedAt = new Date().toISOString();
+          this.selectedCodOrders.delete(orderId);
+          this.queueSync(o);
+          this.saveData();
+          this.renderCurrentTab();
+          this.showToast('COD collected for #' + o.id, 'success');
+        }
+      }
+
+      batchCollectCOD() {
+        if (this.selectedCodOrders.size === 0) {
+          this.showToast('Select at least one order', 'info');
+          return;
+        }
+        var now = new Date().toISOString();
+        var self = this;
+        this.selectedCodOrders.forEach(function(id) {
+          var o = self.orders.find(function(item) { return item.id === id; });
+          if (o && o.status === 'DELIVERED') {
+            o.codCollected = true;
+            o.codCollectedDate = now;
+            o.updatedAt = now;
+            self.queueSync(o);
+          }
+        });
+        this.selectedCodOrders.clear();
+        this.saveData();
+        this.renderCurrentTab();
+        this.showToast('Batch COD collection recorded', 'success');
+      }
+
+      // ═══════════════════════
+      //  RETURNS
+      // ═══════════════════════
+      renderReturns() {
+        var container = document.getElementById('returns-list');
+        var returnedOrders = this.orders.filter(function(o) { return o.status === 'RETURNED'; });
+        var missingCount = returnedOrders.filter(function(o) { return !o.returnReceived; }).length;
+
+        document.getElementById('returns-missing-count').textContent = missingCount;
+
+        if (returnedOrders.length === 0) {
+          container.innerHTML = '<div class="text-center py-8 text-gray-400 text-sm">No returned orders found.</div>';
+          return;
+        }
+
+        container.innerHTML = returnedOrders.map(function(o) {
+          var eid = escapeHtml(o.id);
+          var receivedHtml = o.returnReceived
+            ? '<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800"><i data-lucide="check" class="w-3 h-3 mr-1"></i> Parcel Received</span>'
+            : '<button data-action="mark-return" data-order-id="' + eid + '" class="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-semibold text-xs border border-amber-200 rounded-lg">Confirm Parcel Received</button>';
+
+          return '<div class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between shadow-sm">' +
+            '<div>' +
+              '<div class="font-bold text-sm text-gray-900">#' + eid + ' — ' + escapeHtml(o.customerName) + '</div>' +
+              '<div class="text-xs text-gray-500">' + escapeHtml(o.courier || 'Courier') + ' | Return Cost: Rs. ' + (o.deliveryCharge || 0) + '</div>' +
+            '</div>' +
+            '<div>' + receivedHtml + '</div>' +
+          '</div>';
+        }).join('');
+        lucide.createIcons();
+      }
+
+      markReturnReceived(orderId) {
+        var o = this.orders.find(function(item) { return item.id === orderId; });
+        if (o && o.status === 'RETURNED') {
+          o.returnReceived = true;
+          o.updatedAt = new Date().toISOString();
+          this.queueSync(o);
+          this.saveData();
+          this.renderCurrentTab();
+          this.showToast('Parcel marked as received for #' + o.id, 'success');
+        }
+      }
+
+      // ═══════════════════════
+      //  COURIER ANALYTICS
+      // ═══════════════════════
+      renderCouriers() {
+        var tableBody = document.getElementById('couriers-table-body');
+        var courierStats = {};
+        for (var i = 0; i < this.orders.length; i++) {
+          var o = this.orders[i];
+          if (!o.courier) continue;
+          var name = o.courier.trim();
+          if (!name) continue;
+          if (!courierStats[name]) courierStats[name] = { delivered: 0, returned: 0 };
+          if (o.status === 'DELIVERED') courierStats[name].delivered++;
+          if (o.status === 'RETURNED') courierStats[name].returned++;
+        }
+        var keys = Object.keys(courierStats);
+        if (keys.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-400 text-xs">No courier statistics available yet.</td></tr>';
+          return;
+        }
+        tableBody.innerHTML = keys.map(function(k) {
+          var s = courierStats[k];
+          var total = s.delivered + s.returned;
+          var rateStr = total === 0 ? '—' : (Math.round((s.delivered / total) * 100) + '%');
+          return '<tr>' +
+            '<td class="p-3 font-semibold text-gray-800">' + escapeHtml(k) + '</td>' +
+            '<td class="p-3 text-center text-emerald-600 font-medium">' + s.delivered + '</td>' +
+            '<td class="p-3 text-center text-red-600 font-medium">' + s.returned + '</td>' +
+            '<td class="p-3 text-center font-bold text-gray-900">' + rateStr + '</td>' +
+          '</tr>';
+        }).join('');
+      }
+
+      // ═══════════════════════════════════════
+      //  SYNC QUEUE (action-based format v2)
+      // ═══════════════════════════════════════
+
+      /**
+       * Queue an upsert operation. Deduplicates by orderId.
+       * If a delete was previously queued for this ID, it's replaced with upsert.
+       */
+      queueSync(order) {
+        var entry = {
+          action: 'upsert',
+          orderId: order.id,
+          data: JSON.parse(JSON.stringify(order))
+        };
+        var existingIdx = this.syncQueue.findIndex(function(q) { return q.orderId === order.id; });
+        if (existingIdx !== -1) {
+          this.syncQueue[existingIdx] = entry;
+        } else {
+          this.syncQueue.push(entry);
+        }
+        this.updateSyncIndicator();
+      }
+
+      /**
+       * Queue a delete operation. Replaces any pending upsert for this ID.
+       */
+      queueDelete(orderId) {
+        var entry = {
+          action: 'delete',
+          orderId: orderId,
+          data: null
+        };
+        var existingIdx = this.syncQueue.findIndex(function(q) { return q.orderId === orderId; });
+        if (existingIdx !== -1) {
+          this.syncQueue[existingIdx] = entry;
+        } else {
+          this.syncQueue.push(entry);
+        }
+        this.updateSyncIndicator();
+      }
+
+      // ═══════════════════════════════════════
+      //  GOOGLE SHEETS SYNC
+      // ═══════════════════════════════════════
+
+      /**
+       * Batch sync: sends all pending operations to Google Apps Script.
+       * Only clears the queue when the server confirms success with zero failures.
+       * On partial failure or network error, keeps the entire queue for retry.
+       */
+      async syncGoogleSheets() {
+        if (!this.settings.googleSheetUrl) {
+          this.showToast('Set Google Sheet URL in Settings first', 'info');
+          return;
+        }
+        if (this.syncQueue.length === 0) {
+          this.showToast('Nothing to sync — all data is up to date', 'info');
+          return;
+        }
+        if (this.isSyncing) {
+          this.showToast('Sync already in progress...', 'info');
+          return;
+        }
+
+        this.isSyncing = true;
+
+        // Build batch payload
+        var operations = this.syncQueue.map(function(item) {
+          if (item.action === 'delete') {
+            return { action: 'delete', orderId: item.orderId };
+          }
+          return { action: 'upsert', data: item.data };
+        });
+
+        var payload = { operations: operations };
+
+        try {
+          this.showToast('Syncing ' + operations.length + ' changes...', 'info');
+
+          var response = await fetch(this.settings.googleSheetUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) {
+            this.showToast('Sync failed (HTTP ' + response.status + ') — your local data is safe', 'error');
+            this.isSyncing = false;
+            return;
+          }
+
+          var result;
+          try {
+            result = await response.json();
+          } catch (parseErr) {
+            this.showToast('Sync sent but response was unreadable — changes kept in queue', 'error');
+            this.isSyncing = false;
+            return;
+          }
+
+          if (result && result.success === true) {
+            if (result.failed === 0 || result.failed === undefined) {
+              // All operations processed — safe to clear entire queue
+              var processedCount = result.processed || operations.length;
+              this.syncQueue = [];
+              this.saveData();
+              this.showToast('Synced ' + processedCount + ' changes to Google Sheets', 'success');
+            } else {
+              // Partial failure — keep entire queue for retry (upserts are idempotent)
+              this.showToast('Sync partially failed (' + result.failed + ' errors) — changes kept for retry', 'error');
+            }
+          } else {
+            var errMsg = (result && result.error) ? result.error : 'Unknown error';
+            this.showToast('Sync error: ' + errMsg + ' — your local data is safe', 'error');
+          }
+        } catch (e) {
+          console.error('Sync error:', e);
+          this.showToast('Network error — your local data is safe, retry later', 'error');
+        }
+
+        this.isSyncing = false;
+      }
+
+      /**
+       * Push all existing local orders to Google Sheets sync queue.
+       * Used for initial backup when first connecting.
+       */
+      pushAllOrders() {
+        if (!this.settings.googleSheetUrl) {
+          this.showToast('Set Google Sheet URL in Settings first', 'info');
+          return;
+        }
+        if (this.orders.length === 0) {
+          this.showToast('No orders to push', 'info');
+          return;
+        }
+        var self = this;
+        this.orders.forEach(function(o) {
+          self.queueSync(o);
+        });
+        this.saveData();
+        this.showToast('Queued ' + this.orders.length + ' orders — press the Sync button (↻) to send', 'info');
+      }
+
+      /**
+       * Restore/merge orders from Google Sheets into local storage.
+       * Keeps the more recently updated version when merging.
+       */
+      async restoreFromSheets() {
+        if (!this.settings.googleSheetUrl) {
+          this.showToast('Set Google Sheet URL in Settings first', 'info');
+          return;
+        }
+
+        if (!confirm('This will merge orders from your Google Sheet into local storage. Your existing local orders will be preserved. Continue?')) return;
+
+        try {
+          this.showToast('Fetching orders from Google Sheets...', 'info');
+
+          var fetchUrl = this.settings.googleSheetUrl + (this.settings.googleSheetUrl.indexOf('?') === -1 ? '?' : '&') + 'action=fetch';
+          var response = await fetch(fetchUrl);
+
+          if (!response.ok) {
+            this.showToast('Could not connect to Google Sheets (HTTP ' + response.status + ')', 'error');
+            return;
+          }
+
+          var result;
+          try {
+            result = await response.json();
+          } catch (parseErr) {
+            this.showToast('Could not read response from Google Sheets', 'error');
+            return;
+          }
+
+          if (!result || !result.success) {
+            this.showToast('Error: ' + ((result && result.error) || 'unknown'), 'error');
+            return;
+          }
+
+          var imported = result.orders || [];
+          if (imported.length === 0) {
+            this.showToast('No orders found in Google Sheet', 'info');
+            return;
+          }
+
+          var added = 0, updated = 0, skipped = 0;
+          var self = this;
+
+          for (var i = 0; i < imported.length; i++) {
+            var validated = validateOrderForImport(imported[i]);
+            if (!validated) { skipped++; continue; }
+
+            var idx = self.orders.findIndex(function(o) { return o.id === validated.id; });
+            if (idx !== -1) {
+              // Merge: keep the more recently updated version
+              var existingDate = new Date(self.orders[idx].updatedAt || self.orders[idx].createdAt);
+              var importedDate = new Date(validated.updatedAt || validated.createdAt);
+              if (importedDate > existingDate) {
+                self.orders[idx] = validated;
+                updated++;
+              }
+            } else {
+              self.orders.push(validated);
+              added++;
+            }
+          }
+
+          this.saveData();
+          this.renderCurrentTab();
+
+          var msg = 'Restored from Google Sheets: ' + added + ' added, ' + updated + ' updated';
+          if (skipped > 0) msg += ', ' + skipped + ' skipped';
+          this.showToast(msg, 'success');
+        } catch (e) {
+          console.error('Restore from Sheets error:', e);
+          this.showToast('Network error — could not fetch from Google Sheets', 'error');
+        }
+      }
+
+      // ═══════════════════════
+      //  SETTINGS
+      // ═══════════════════════
+      openSettingsModal() {
+        document.getElementById('setting-gsheet-url').value = this.settings.googleSheetUrl || '';
+        this.updateSheetStatus();
+        document.getElementById('modal-settings').classList.remove('hidden');
+        lucide.createIcons();
+      }
+
+      closeSettingsModal() {
+        document.getElementById('modal-settings').classList.add('hidden');
+      }
+
+      updateSheetStatus() {
+        var dot = document.getElementById('gsheet-status-dot');
+        var text = document.getElementById('gsheet-status-text');
+        if (!dot || !text) return;
+
+        if (!this.settings.googleSheetUrl) {
+          dot.className = 'w-2 h-2 rounded-full bg-gray-400';
+          text.textContent = 'Not configured';
+          text.className = 'text-[10px] text-gray-500';
+        } else if (this.syncQueue.length > 0) {
+          dot.className = 'w-2 h-2 rounded-full bg-amber-500';
+          text.textContent = 'Sync pending (' + this.syncQueue.length + ')';
+          text.className = 'text-[10px] text-amber-600';
+        } else {
+          dot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+          text.textContent = 'Connected';
+          text.className = 'text-[10px] text-emerald-600';
+        }
+      }
+
+      saveSettings() {
+        var newUrl = document.getElementById('setting-gsheet-url').value.trim();
+        var wasConfigured = !!this.settings.googleSheetUrl;
+
+        this.settings.googleSheetUrl = newUrl;
+        this.saveData();
+
+        // First connection: offer to push existing orders
+        if (newUrl && !wasConfigured && this.orders.length > 0) {
+          this.closeSettingsModal();
+          if (confirm('Google Sheets connected! Push your ' + this.orders.length + ' existing orders to Google Sheets for backup?\n\nYou can always do this later via Settings → "Push All to Sheets".')) {
+            this.pushAllOrders();
+          }
+          this.showToast('Settings saved', 'success');
+          return;
+        }
+
+        this.closeSettingsModal();
+        this.showToast('Settings saved', 'success');
+      }
+
+      // ═══════════════════════
+      //  EXPORT & RESTORE
+      // ═══════════════════════
+      exportJSON() {
+        var backupData = {
+          schemaVersion: '1.0',
+          exportedAt: new Date().toISOString(),
+          orders: this.orders
+        };
+        var dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backupData, null, 2));
+        var dlAnchor = document.createElement('a');
+        dlAnchor.setAttribute('href', dataStr);
+        dlAnchor.setAttribute('download', 'bikri_hub_orders_backup_' + Date.now() + '.json');
+        document.body.appendChild(dlAnchor);
+        dlAnchor.click();
+        dlAnchor.remove();
+        this.showToast('Order data exported as JSON', 'success');
+      }
+
+      exportExcel() {
+        try {
+          if (typeof XLSX === 'undefined') { this.exportCSV(); return; }
+          var exportRows = this.orders.map(function(o) {
+            return {
+              'Order ID': o.id, 'Customer Name': o.customerName, 'Phone': o.phone, 'Address': o.address,
+              'Item Cost': o.costPrice, 'Delivery Cost': o.deliveryCharge, 'COD Amount': o.codAmount,
+              'Courier': o.courier, 'Tracking ID': o.trackingId, 'Status': o.status,
+              'COD Collected': o.codCollected ? 'YES' : 'NO', 'COD Collected Date': o.codCollectedDate || '',
+              'Return Received': o.returnReceived ? 'YES' : 'NO', 'Created Date': o.createdAt,
+              'Updated Date': o.updatedAt,
+              'Est. Net Profit': o.status === 'DELIVERED' ? (o.codAmount - o.costPrice - o.deliveryCharge) : 0
+            };
+          });
+          var worksheet = XLSX.utils.json_to_sheet(exportRows);
+          var workbook = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
+          XLSX.writeFile(workbook, 'bikri_hub_export_' + Date.now() + '.xlsx');
+          this.showToast('Exported as Excel', 'success');
+        } catch (e) {
+          console.error('Excel export failed:', e);
+          this.exportCSV();
+        }
+      }
+
+      exportCSV() {
+        var headers = ['Order ID', 'Customer Name', 'Phone', 'Address', 'Item Cost', 'Delivery Cost', 'COD Amount', 'Courier', 'Tracking ID', 'Status', 'COD Collected', 'Created Date'];
+        var rows = this.orders.map(function(o) {
+          return [
+            escapeCSVField(o.id), escapeCSVField(o.customerName), escapeCSVField(o.phone),
+            escapeCSVField(o.address), escapeCSVField(o.costPrice), escapeCSVField(o.deliveryCharge),
+            escapeCSVField(o.codAmount), escapeCSVField(o.courier), escapeCSVField(o.trackingId),
+            escapeCSVField(o.status), escapeCSVField(o.codCollected ? 'YES' : 'NO'), escapeCSVField(o.createdAt)
+          ].join(',');
+        });
+        var csvContent = headers.map(escapeCSVField).join(',') + '\n' + rows.join('\n');
+        var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'bikri_hub_export_' + Date.now() + '.csv');
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        this.showToast('Exported as CSV (Excel library unavailable)', 'info');
+      }
+
+      handleRestoreJSON(event) {
+        var file = event.target.files[0];
+        if (!file) return;
+        var mode = document.getElementById('restore-mode').value;
+        var self = this;
+        var reader = new FileReader();
+
+        reader.onload = function(e) {
+          try {
+            var data = JSON.parse(e.target.result);
+            var rawOrders = Array.isArray(data.orders) ? data.orders : (Array.isArray(data) ? data : []);
+            if (rawOrders.length === 0) {
+              self.showToast('No orders found in file', 'error');
+              return;
+            }
+
+            var validOrders = [];
+            var skippedCount = 0;
+            for (var i = 0; i < rawOrders.length; i++) {
+              var validated = validateOrderForImport(rawOrders[i]);
+              if (validated) { validOrders.push(validated); }
+              else { skippedCount++; }
+            }
+
+            if (validOrders.length === 0) {
+              self.showToast('No valid orders found (' + skippedCount + ' skipped due to invalid data)', 'error');
+              return;
+            }
+
+            if (mode === 'REPLACE') {
+              self.orders = validOrders;
+              for (var j = 0; j < validOrders.length; j++) {
+                self.queueSync(validOrders[j]);
+              }
+            } else {
+              for (var k = 0; k < validOrders.length; k++) {
+                var imp = validOrders[k];
+                var idx = self.orders.findIndex(function(o) { return o.id === imp.id; });
+                if (idx !== -1) { self.orders[idx] = imp; }
+                else { self.orders.push(imp); }
+                self.queueSync(imp);
+              }
+            }
+
+            self.saveData();
+            self.renderCurrentTab();
+            self.closeSettingsModal();
+
+            var msg = 'Restored ' + validOrders.length + ' orders';
+            if (skippedCount > 0) msg += ' (' + skippedCount + ' invalid skipped)';
+            self.showToast(msg, 'success');
+          } catch (err) {
+            console.error('Restore error:', err);
+            self.showToast('Invalid backup file — could not parse JSON', 'error');
+          }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
+      }
+
+      clearAllData() {
+        if (confirm('WARNING: This will permanently erase all orders and the sync queue. Your settings will be preserved.\n\nThis does NOT delete orders from your Google Sheet. Are you sure?')) {
+          this.orders = [];
+          this.syncQueue = [];
+          this.saveData();
+          this.renderCurrentTab();
+          this.closeSettingsModal();
+          this.showToast('All orders and sync queue cleared', 'info');
+        }
+      }
+
+      // ═══════════════════════
+      //  EVENT DELEGATION
+      // ═══════════════════════
+      setupEventListeners() {
+        var self = this;
+
+        document.addEventListener('click', function(e) {
+          var target = e.target.closest('[data-action]');
+          if (!target) return;
+          var action = target.dataset.action;
+          var orderId = target.dataset.orderId;
+          switch (action) {
+            case 'edit-order':   self.openOrderModal(orderId); break;
+            case 'delete-order': self.deleteOrder(orderId); break;
+            case 'collect-cod':  self.collectCOD(orderId); break;
+            case 'mark-return':  self.markReturnReceived(orderId); break;
+          }
+        });
+
+        document.addEventListener('change', function(e) {
+          var target = e.target.closest('[data-action]');
+          if (!target) return;
+          var action = target.dataset.action;
+          var orderId = target.dataset.orderId;
+          switch (action) {
+            case 'change-status': self.changeOrderStatus(orderId, target.value); break;
+            case 'toggle-cod':    self.toggleSelectCOD(orderId); break;
+          }
+        });
+
+        document.getElementById('batch-collect-btn').addEventListener('click', function() {
+          self.batchCollectCOD();
+        });
+      }
+    }
+
+    // ── Initialize ──
+    var app;
+    window.addEventListener('DOMContentLoaded', function() {
+      app = new BikriHubApp();
+    });
+  </script>
+</body>
+</html>
