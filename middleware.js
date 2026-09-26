@@ -1,31 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export function middleware(req: NextRequest) {
-  const basicAuth = req.headers.get('authorization');
+  const url = req.nextUrl;
+  const token = url.searchParams.get('token');
+  const cookie = req.cookies.get('access_token')?.value;
 
-  if (basicAuth && basicAuth.startsWith('Basic ')) {
-    try {
-      const authValue = basicAuth.split(' ')[1];
-      // Use Buffer which is safer in Node/Edge environments
-      const decoded = Buffer.from(authValue, 'base64').toString('utf-8');
-      const [user, pwd] = decoded.split(':');
+  // Set the secret key here (or read from process.env.CLIENT_PASS)
+  const SECRET = process.env.CLIENT_PASS || 'Ramupass2026';
 
-      const validUser = process.env.CLIENT_USER || 'client';
-      const validPass = process.env.CLIENT_PASS || 'SecretPass123!';
-
-      if (user === validUser && pwd === validPass) {
-        return NextResponse.next();
-      }
-    } catch {
-      // In case decoding fails, fall through to prompt again
-    }
+  // 1. If Ramu clicks the link with ?token=..., save cookie & redirect to clean URL
+  if (token === SECRET) {
+    const cleanUrl = new URL(url.pathname, req.url);
+    const response = NextResponse.redirect(cleanUrl);
+    response.cookies.set('access_token', SECRET, {
+      path: '/',
+      httpOnly: true,
+      secure: true,
+      maxAge: 60 * 60 * 24 * 7, // keeps him logged in for 7 days
+    });
+    return response;
   }
 
-  return new NextResponse('Authentication required', {
-    status: 401,
-    headers: {
-      'WWW-Authenticate': 'Basic realm="Secure Access"',
-    },
+  // 2. If cookie exists and matches, let him in
+  if (cookie === SECRET) {
+    return NextResponse.next();
+  }
+
+  // 3. Otherwise, block access
+  return new NextResponse('Access Denied. A valid access link is required.', {
+    status: 403,
+    headers: { 'Content-Type': 'text/plain' },
   });
 }
 
