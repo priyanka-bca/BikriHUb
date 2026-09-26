@@ -8,48 +8,155 @@
   <meta http-equiv="Expires" content="0">
   <title>Bikri Hub — Order Management for Social Sellers</title>
 
-  <!-- ================= ACCESS CONTROL GATE ================= -->
+  <!-- ================= BIKRI HUB BROWSER-LOCK GATE ================= -->
+  <style>
+    /* Prevent UI flashing while verifying license with Supabase */
+    .bikri-auth-loading body {
+      display: none !important;
+    }
+  </style>
   <script>
-    (function () {
-      // Add future client keys to this array
-      var VALID_TOKENS = ['Ramupass2026'];
+    (async function () {
+      // Hide body immediately during check
+      document.documentElement.classList.add('bikri-auth-loading');
 
-      var params = new URLSearchParams(window.location.search);
-      var token = params.get('token');
+      const SUPABASE_URL = 'https://cbvmprccxgsxotgxycoe.supabase.co';
+      const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNidm1wcmNjeGdzeG90Z3h5Y29lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0MzM5MjAsImV4cCI6MjEwNjAwOTkyMH0.gnSG14s0MWTegFgz0vtu82ZPTfC-z421dwAdNo9XswQ';
 
-      // 1. If Ramu arrives via his personalized link:
-      if (token && VALID_TOKENS.indexOf(token) !== -1) {
-        localStorage.setItem('bikri_device_key', token);
-        // Clean URL immediately so the token is not visible to copy/paste
-        window.history.replaceState({}, document.title, window.location.pathname);
+      // 1. Get or generate persistent browser fingerprint ID
+      let browserId = localStorage.getItem('bikri_browser_uuid');
+      if (!browserId) {
+        browserId = 'b_' + (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36));
+        localStorage.setItem('bikri_browser_uuid', browserId);
       }
 
-      // 2. Check if current device is authenticated
-      var storedKey = localStorage.getItem('bikri_device_key');
-      if (!storedKey || VALID_TOKENS.indexOf(storedKey) === -1) {
+      // 2. Extract license from URL parameter or saved local storage
+      const urlParams = new URLSearchParams(window.location.search);
+      const incomingLicense = urlParams.get('license');
+      const activeLicense = incomingLicense || localStorage.getItem('bikri_active_license');
+
+      if (!activeLicense) {
+        renderLockScreen('No License Found', 'Please access Bikri Hub using your authorized license link.');
+        return;
+      }
+
+      // 3. Authenticate against Supabase RPC atomically
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/verify_and_bind_browser`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({
+            p_license: activeLicense.trim(),
+            p_browser_id: browserId
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Network error during verification');
+        }
+
+        const result = await response.json();
+
+        // 4. Handle DB response
+        if (result && result.ok) {
+          // Store active license for future frictionless visits
+          localStorage.setItem('bikri_active_license', activeLicense.trim());
+
+          // Clean the license query parameter from address bar
+          if (incomingLicense) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+
+          // Unhide app and execute normally
+          document.documentElement.classList.remove('bikri-auth-loading');
+        } else {
+          // Device mismatch, revoked license, or invalid key
+          const msg = (result && result.message) ? result.message : 'Access denied.';
+          renderLockScreen('Access Denied', msg);
+        }
+      } catch (err) {
+        console.error('License verification failed:', err);
+        renderLockScreen('Verification Error', 'Unable to verify your license. Please check your internet connection.');
+      }
+
+      function renderLockScreen(title, message) {
+        document.documentElement.classList.remove('bikri-auth-loading');
         if (window.stop) window.stop();
+
         document.documentElement.innerHTML = `
           <!DOCTYPE html>
           <html lang="en">
           <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Bikri Hub — Access Denied</title>
+            <title>Bikri Hub — ${title}</title>
+            <style>
+              body {
+                margin: 0;
+                background: #f9fafb;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                padding: 20px;
+                box-sizing: border-box;
+              }
+              .card {
+                background: #ffffff;
+                max-width: 420px;
+                width: 100%;
+                border: 1px solid #e5e7eb;
+                border-radius: 16px;
+                padding: 32px 24px;
+                text-align: center;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+              }
+              .icon {
+                width: 48px;
+                height: 48px;
+                background: #fee2e2;
+                color: #dc2626;
+                border-radius: 12px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 22px;
+                font-weight: bold;
+                margin-bottom: 16px;
+              }
+              h2 {
+                margin: 0 0 8px 0;
+                color: #111827;
+                font-size: 20px;
+                font-weight: 700;
+              }
+              p {
+                margin: 0;
+                color: #4b5563;
+                font-size: 14px;
+                line-height: 1.5;
+              }
+            </style>
           </head>
-          <body style="margin: 0; background: #f9fafb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; box-sizing: border-box;">
-            <div style="background: #ffffff; max-width: 420px; width: 100%; border: 1px solid #e5e7eb; border-radius: 16px; padding: 32px 24px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-              <div style="width: 48px; height: 48px; background: #fee2e2; color: #dc2626; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; margin-bottom: 16px;">!</div>
-              <h2 style="margin: 0 0 8px 0; color: #111827; font-size: 20px; font-weight: 700;">Access Denied</h2>
-              <p style="margin: 0; color: #4b5563; font-size: 14px; line-height: 1.5;">This device is not authorized to access Bikri Hub. Please use your personalized license link to activate your access.</p>
+          <body>
+            <div class="card">
+              <div class="icon">!</div>
+              <h2>${title}</h2>
+              <p>${message}</p>
             </div>
           </body>
           </html>
         `;
-        throw new Error('Access Denied: Valid token required.');
+        throw new Error(title + ': ' + message);
       }
     })();
   </script>
-  <!-- ======================================================== -->
+  <!-- =============================================================== -->
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
