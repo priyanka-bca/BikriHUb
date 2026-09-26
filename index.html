@@ -818,6 +818,9 @@
         deliveryField.readOnly = false;
         lockNote.classList.add('hidden');
         phoneError.classList.add('hidden');
+        phoneError.textContent = '';
+        var phoneField = document.getElementById('form-phone');
+        if (phoneField) phoneField.classList.remove('border-red-500');
 
         if (orderId) {
           var o = this.orders.find(function(item) { return item.id === orderId; });
@@ -898,14 +901,22 @@
 
         var phoneResult = validatePhone(phoneRaw);
         var phoneError = document.getElementById('form-phone-error');
+        var phoneInput = document.getElementById('form-phone');
         if (!phoneResult.valid) {
           phoneError.textContent = phoneResult.error;
           phoneError.classList.remove('hidden');
-          document.getElementById('form-phone').focus();
+          if (phoneInput) {
+            phoneInput.classList.add('border-red-500');
+            phoneInput.focus();
+          }
+          this.showToast(phoneResult.error, 'error');
           this.isSubmitting = false;
           return;
         }
         phoneError.classList.add('hidden');
+        if (phoneInput) {
+          phoneInput.classList.remove('border-red-500');
+        }
         var phone = phoneResult.normalized;
 
         if (!courier) {
@@ -1672,6 +1683,34 @@
         }
         if (codInput) {
           codInput.addEventListener('input', function() { self.checkDeliveryCostWarning(); });
+        }
+
+        var phoneInput = document.getElementById('form-phone');
+        var phoneError = document.getElementById('form-phone-error');
+        if (phoneInput && phoneError) {
+          phoneInput.addEventListener('input', function() {
+            var res = validatePhone(phoneInput.value);
+            if (res.valid) {
+              phoneError.classList.add('hidden');
+              phoneError.textContent = '';
+              phoneInput.classList.remove('border-red-500');
+            }
+          });
+          phoneInput.addEventListener('blur', function() {
+            var val = phoneInput.value.trim();
+            if (val.length > 0) {
+              var res = validatePhone(val);
+              if (!res.valid) {
+                phoneError.textContent = res.error;
+                phoneError.classList.remove('hidden');
+                phoneInput.classList.add('border-red-500');
+              } else {
+                phoneError.classList.add('hidden');
+                phoneError.textContent = '';
+                phoneInput.classList.remove('border-red-500');
+              }
+            }
+          });
         }
       }
     }
