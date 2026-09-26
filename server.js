@@ -18,7 +18,7 @@ const MIME_TYPES = {
 // ACCESS CONTROL
 // ============================================================
 
-const SECRET = process.env.CLIENT_TOKEN || 'Ramupass2026';
+const SECRET = process.env.CLIENT_PASS || 'Ramupass2026';
 
 function getAccessCookie(req) {
   const cookies = req.headers.cookie || '';
