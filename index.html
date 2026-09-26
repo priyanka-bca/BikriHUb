@@ -260,12 +260,12 @@
         <div class="grid grid-cols-2 gap-2">
           <div>
             <label for="form-phone" class="block text-xs font-semibold text-gray-700 mb-1">Phone Number *</label>
-            <input type="text" id="form-phone" required placeholder="98XXXXXXXX" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+            <input type="text" id="form-phone" required placeholder="98XXXXXXXX or 97XXXXXXXX" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
             <div id="form-phone-error" class="hidden text-xs text-red-600 mt-0.5"></div>
           </div>
           <div>
-            <label for="form-courier" class="block text-xs font-semibold text-gray-700 mb-1">Courier Service</label>
-            <input type="text" id="form-courier" placeholder="Pathao, Upaya..." class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+            <label for="form-courier" class="block text-xs font-semibold text-gray-700 mb-1">Courier Service *</label>
+            <input type="text" id="form-courier" required placeholder="Pathao, Upaya..." class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
           </div>
         </div>
 
@@ -277,15 +277,15 @@
         <div class="grid grid-cols-3 gap-2">
           <div>
             <label for="form-cod" class="block text-xs font-semibold text-gray-700 mb-1">COD Amount (Rs) *</label>
-            <input type="number" id="form-cod" min="0" required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+            <input type="number" id="form-cod" min="0" required placeholder="0" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
           </div>
           <div>
-            <label for="form-cost" class="block text-xs font-semibold text-gray-700 mb-1">Item Cost (Rs)</label>
-            <input type="number" id="form-cost" min="0" value="0" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+            <label for="form-cost" class="block text-xs font-semibold text-gray-700 mb-1">Item Cost (Rs) *</label>
+            <input type="number" id="form-cost" min="0" required placeholder="0" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
           </div>
           <div>
-            <label for="form-delivery" class="block text-xs font-semibold text-gray-700 mb-1">Delivery Cost (Rs)</label>
-            <input type="number" id="form-delivery" min="0" value="0" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+            <label for="form-delivery" class="block text-xs font-semibold text-gray-700 mb-1">Delivery Cost (Rs) *</label>
+            <input type="number" id="form-delivery" min="0" required placeholder="0" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
           </div>
         </div>
 
@@ -295,12 +295,12 @@
 
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label for="form-tracking" class="block text-xs font-semibold text-gray-700 mb-1">Tracking ID</label>
-            <input type="text" id="form-tracking" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+            <label for="form-tracking" class="block text-xs font-semibold text-gray-700 mb-1">Tracking ID *</label>
+            <input type="text" id="form-tracking" required placeholder="Tracking or AWB number..." class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
           </div>
           <div>
-            <label for="form-status" class="block text-xs font-semibold text-gray-700 mb-1">Status</label>
-            <select id="form-status" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none bg-white">
+            <label for="form-status" class="block text-xs font-semibold text-gray-700 mb-1">Status *</label>
+            <select id="form-status" required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none bg-white">
               <option value="PENDING">Pending</option>
               <option value="PROCESSING">Processing</option>
               <option value="DISPATCHED">Dispatched</option>
@@ -469,16 +469,20 @@
 
     // ── Phone validation for Nepal mobile ──
     function validatePhone(phone) {
-      var cleaned = String(phone || '').replace(/[\s\-\(\)\.]/g, '');
-      if (cleaned.startsWith('+977')) cleaned = cleaned.substring(4);
-      else if (cleaned.startsWith('977') && cleaned.length === 13) cleaned = cleaned.substring(3);
-      if (!/^\d{10}$/.test(cleaned)) {
-        return { valid: false, error: 'Enter a valid 10-digit mobile number (e.g., 98XXXXXXXX)' };
+      var str = String(phone == null ? '' : phone).trim();
+      if (!str) {
+        return { valid: false, error: 'Phone number is required.' };
       }
-      if (!cleaned.startsWith('9')) {
-        return { valid: false, error: 'Nepal mobile numbers start with 9' };
+      if (!/^\d+$/.test(str)) {
+        return { valid: false, error: 'Phone number must contain digits only (no spaces or letters).' };
       }
-      return { valid: true, normalized: cleaned };
+      if (str.length !== 10) {
+        return { valid: false, error: 'Phone number must be exactly 10 digits.' };
+      }
+      if (!str.startsWith('98') && !str.startsWith('97')) {
+        return { valid: false, error: 'Phone number must start with 98 or 97.' };
+      }
+      return { valid: true, normalized: str };
     }
 
     // ── Build WhatsApp-ready phone number ──
@@ -656,18 +660,19 @@
 
         for (var i = 0; i < this.orders.length; i++) {
           var o = this.orders[i];
-          if (counts[o.status] !== undefined) counts[o.status]++;
+          var st = String(o.status || '').toUpperCase().trim();
+          if (counts[st] !== undefined) counts[st]++;
           var cod = Number(o.codAmount) || 0;
           var cost = Number(o.costPrice) || 0;
           var delivery = Number(o.deliveryCharge) || 0;
 
-          if (o.status === 'DELIVERED') {
+          if (st === 'DELIVERED') {
             deliveredRevenue += cod;
             netProfit += (cod - cost - delivery);
             if (!o.codCollected) { uncollectedCod += cod; uncollectedCount++; }
-          } else if (o.status === 'RETURNED') {
+          } else if (st === 'RETURNED') {
             netProfit -= delivery;
-          } else if (o.status === 'PENDING' || o.status === 'PROCESSING' || o.status === 'DISPATCHED') {
+          } else if (st === 'PENDING' || st === 'PROCESSING' || st === 'DISPATCHED') {
             activeProjectedProfit += (cod - cost - delivery);
             activeCount++;
           }
@@ -678,7 +683,7 @@
         document.getElementById('dash-uncollected-cod').textContent = 'Rs. ' + uncollectedCod.toLocaleString();
         document.getElementById('dash-uncollected-count').textContent = uncollectedCount + ' orders pending payout';
         document.getElementById('dash-projected-profit').textContent = 'Rs. ' + activeProjectedProfit.toLocaleString();
-        document.getElementById('dash-active-orders-count').textContent = activeCount + ' active orders';
+        document.getElementById('dash-active-orders-count').textContent = activeCount + (activeCount === 1 ? ' active order' : ' active orders');
 
         var grid = document.getElementById('dash-status-grid');
         grid.innerHTML = STATUSES.map(function(st) {
@@ -839,6 +844,11 @@
         } else {
           document.getElementById('modal-order-title').textContent = 'New Order';
           document.getElementById('form-order-id').value = '';
+          codField.value = '';
+          costField.value = '';
+          deliveryField.value = '';
+          document.getElementById('form-tracking').value = '';
+          document.getElementById('form-status').value = 'PENDING';
         }
 
         this.checkDeliveryCostWarning();
@@ -869,26 +879,86 @@
 
         var id = document.getElementById('form-order-id').value;
         var customerName = document.getElementById('form-customer-name').value.trim();
-        var phone = document.getElementById('form-phone').value.trim();
+        var phoneRaw = document.getElementById('form-phone').value;
         var courier = document.getElementById('form-courier').value.trim();
         var address = document.getElementById('form-address').value.trim();
-        var codAmount = parseFloat(document.getElementById('form-cod').value) || 0;
-        var costPrice = parseFloat(document.getElementById('form-cost').value) || 0;
-        var deliveryCharge = parseFloat(document.getElementById('form-delivery').value) || 0;
+        var codRaw = document.getElementById('form-cod').value.trim();
+        var costRaw = document.getElementById('form-cost').value.trim();
+        var delRaw = document.getElementById('form-delivery').value.trim();
         var trackingId = document.getElementById('form-tracking').value.trim();
         var status = document.getElementById('form-status').value;
         var now = new Date().toISOString();
 
-        var phoneResult = validatePhone(phone);
+        if (!customerName) {
+          this.showToast('Customer Name is required', 'error');
+          document.getElementById('form-customer-name').focus();
+          this.isSubmitting = false;
+          return;
+        }
+
+        var phoneResult = validatePhone(phoneRaw);
         var phoneError = document.getElementById('form-phone-error');
         if (!phoneResult.valid) {
           phoneError.textContent = phoneResult.error;
           phoneError.classList.remove('hidden');
+          document.getElementById('form-phone').focus();
           this.isSubmitting = false;
           return;
         }
         phoneError.classList.add('hidden');
-        phone = phoneResult.normalized;
+        var phone = phoneResult.normalized;
+
+        if (!courier) {
+          this.showToast('Courier Service is required', 'error');
+          document.getElementById('form-courier').focus();
+          this.isSubmitting = false;
+          return;
+        }
+
+        if (!address) {
+          this.showToast('Delivery Address is required', 'error');
+          document.getElementById('form-address').focus();
+          this.isSubmitting = false;
+          return;
+        }
+
+        var codAmount = parseFloat(codRaw);
+        if (codRaw === '' || isNaN(codAmount) || codAmount < 0) {
+          this.showToast('COD Amount is required', 'error');
+          document.getElementById('form-cod').focus();
+          this.isSubmitting = false;
+          return;
+        }
+
+        var costPrice = parseFloat(costRaw);
+        if (costRaw === '' || isNaN(costPrice) || costPrice < 0) {
+          this.showToast('Item Cost is required', 'error');
+          document.getElementById('form-cost').focus();
+          this.isSubmitting = false;
+          return;
+        }
+
+        var deliveryCharge = parseFloat(delRaw);
+        if (delRaw === '' || isNaN(deliveryCharge) || deliveryCharge < 0) {
+          this.showToast('Delivery Cost is required', 'error');
+          document.getElementById('form-delivery').focus();
+          this.isSubmitting = false;
+          return;
+        }
+
+        if (!trackingId) {
+          this.showToast('Tracking ID is required', 'error');
+          document.getElementById('form-tracking').focus();
+          this.isSubmitting = false;
+          return;
+        }
+
+        if (!status || !STATUSES.includes(status)) {
+          this.showToast('Status is required', 'error');
+          document.getElementById('form-status').focus();
+          this.isSubmitting = false;
+          return;
+        }
 
         if (id) {
           // ── EDIT existing order ──
