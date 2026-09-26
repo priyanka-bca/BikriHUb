@@ -253,3 +253,7 @@ function jsonResponse(obj) {
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }
+function testCreateSheet() {
+  var sheet = getOrCreateSheet();
+  Logger.log(sheet.getName());
+}
