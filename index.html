@@ -821,6 +821,7 @@
         phoneError.textContent = '';
         var phoneField = document.getElementById('form-phone');
         if (phoneField) phoneField.classList.remove('border-red-500');
+        if (costField) costField.classList.remove('border-red-500');
 
         if (orderId) {
           var o = this.orders.find(function(item) { return item.id === orderId; });
@@ -947,6 +948,21 @@
           document.getElementById('form-cost').focus();
           this.isSubmitting = false;
           return;
+        }
+
+        if (costPrice > codAmount) {
+          this.showToast('Item Cost cannot be greater than COD Amount.', 'error');
+          var costInput = document.getElementById('form-cost');
+          if (costInput) {
+            costInput.classList.add('border-red-500');
+            costInput.focus();
+          }
+          this.isSubmitting = false;
+          return;
+        }
+        var costInput = document.getElementById('form-cost');
+        if (costInput) {
+          costInput.classList.remove('border-red-500');
         }
 
         var deliveryCharge = parseFloat(delRaw);
@@ -1678,11 +1694,28 @@
 
         var deliveryInput = document.getElementById('form-delivery');
         var codInput = document.getElementById('form-cod');
+        var costInput = document.getElementById('form-cost');
         if (deliveryInput) {
           deliveryInput.addEventListener('input', function() { self.checkDeliveryCostWarning(); });
         }
         if (codInput) {
-          codInput.addEventListener('input', function() { self.checkDeliveryCostWarning(); });
+          codInput.addEventListener('input', function() {
+            self.checkDeliveryCostWarning();
+            var c = parseFloat(costInput ? costInput.value : '');
+            var cod = parseFloat(codInput.value);
+            if (!isNaN(c) && !isNaN(cod) && c <= cod && costInput) {
+              costInput.classList.remove('border-red-500');
+            }
+          });
+        }
+        if (costInput) {
+          costInput.addEventListener('input', function() {
+            var c = parseFloat(costInput.value);
+            var cod = parseFloat(codInput ? codInput.value : '');
+            if (!isNaN(c) && !isNaN(cod) && c <= cod) {
+              costInput.classList.remove('border-red-500');
+            }
+          });
         }
 
         var phoneInput = document.getElementById('form-phone');
