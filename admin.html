@@ -77,13 +77,65 @@
 
     <!-- ADMIN CONTENT VIEW (VISIBLE ONLY IF SERVER CONFIRMS ADMIN) -->
     <div id="admin-content-view" class="hidden space-y-6">
+
+      <!-- GLOBAL CUSTOMER LINK BANNER -->
+      <div class="bg-indigo-50 border border-brand-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+        <div class="flex items-center space-x-3">
+          <div class="p-2.5 bg-brand-600 text-white rounded-xl shadow-sm"><i data-lucide="link" class="w-5 h-5"></i></div>
+          <div>
+            <div class="text-xs font-bold text-gray-900">Universal Bikri Hub Customer Link (Send this to all customers):</div>
+            <div id="customer-app-url-display" class="text-xs font-mono text-brand-700 font-semibold break-all"></div>
+          </div>
+        </div>
+        <button onclick="adminApp.copyUniversalLink()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 shadow-sm transition flex-shrink-0">
+          <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+          <span>Copy Customer Link</span>
+        </button>
+      </div>
+
+      <!-- MODAL: ACTIVATION SUCCESS & SHARE -->
+      <div id="modal-activation-success" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white max-w-md w-full rounded-2xl p-6 shadow-2xl space-y-4">
+          <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+            <i data-lucide="check-circle" class="w-7 h-7"></i>
+          </div>
+          <div class="text-center">
+            <h3 class="text-lg font-bold text-gray-900">Customer Activated Successfully!</h3>
+            <p class="text-xs text-gray-500 mt-1">Backend partition and license created automatically. Copy the link or message below to send to the customer.</p>
+          </div>
+          <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs space-y-2">
+            <div class="flex justify-between"><span class="text-gray-500 font-medium">Customer ID:</span><span id="modal-cust-id" class="font-bold font-mono text-gray-900"></span></div>
+            <div class="flex justify-between"><span class="text-gray-500 font-medium">Name:</span><span id="modal-cust-name" class="font-semibold text-gray-900"></span></div>
+            <div class="flex justify-between"><span class="text-gray-500 font-medium">Registered Gmail:</span><span id="modal-cust-email" class="font-mono text-gray-900"></span></div>
+            <div class="flex justify-between items-center"><span class="text-gray-500 font-medium">Status:</span><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded-full text-[10px]">ACTIVE</span></div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 mb-1">Customer Bikri Hub Link</label>
+            <div class="flex space-x-2">
+              <input type="text" id="modal-cust-link" readonly class="flex-1 px-3 py-2 text-xs bg-gray-100 border border-gray-300 rounded-lg font-mono">
+              <button onclick="adminApp.copyModalLink()" class="px-3.5 py-2 bg-brand-600 text-white rounded-lg text-xs font-semibold hover:bg-brand-700 flex items-center space-x-1">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i><span>Copy</span>
+              </button>
+            </div>
+          </div>
+          <div class="space-y-2 pt-2 border-t border-gray-100">
+            <button onclick="adminApp.copyWelcomeMessage()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center space-x-2 shadow-sm transition">
+              <i data-lucide="message-square" class="w-4 h-4"></i>
+              <span>Copy Ready-to-Send WhatsApp / SMS Message</span>
+            </button>
+            <button onclick="adminApp.closeActivationModal()" class="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-semibold">
+              Done / Close
+            </button>
+          </div>
+        </div>
+      </div>
       
       <!-- ADD CUSTOMER FORM -->
       <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
         <div class="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
           <div>
             <h2 class="font-bold text-gray-900 text-sm">Add New Customer License</h2>
-            <p class="text-xs text-gray-500 mt-0.5">Activate a one-time customer license by entering their name and Gmail.</p>
+            <p class="text-xs text-gray-500 mt-0.5">Activate a customer license by entering their name and Gmail. Backend partition is auto-created.</p>
           </div>
           <button onclick="adminApp.loadCustomers()" class="text-xs text-brand-600 hover:text-brand-700 flex items-center space-x-1 font-semibold">
             <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i><span>Refresh</span>
@@ -255,8 +307,87 @@
         if (this.currentUser) {
           document.getElementById('admin-user-email').textContent = this.currentUser.email + ' (Owner)';
         }
+        var appUrlEl = document.getElementById('customer-app-url-display');
+        if (appUrlEl) appUrlEl.textContent = this.getCustomerUrl();
         lucide.createIcons();
         this.loadCustomers();
+      }
+
+      getCustomerUrl() {
+        var href = window.location.href;
+        if (href.indexOf('admin.html') !== -1) {
+          return href.replace('admin.html', 'index.html').split('?')[0].split('#')[0];
+        }
+        return window.location.origin + '/index.html';
+      }
+
+      copyUniversalLink() {
+        var url = this.getCustomerUrl();
+        var self = this;
+        navigator.clipboard.writeText(url).then(function() {
+          self.showToast('Copied universal customer link to clipboard!', 'success');
+        }).catch(function() {
+          prompt('Universal customer link (copy below):', url);
+        });
+      }
+
+      showActivationModal(customer) {
+        var modal = document.getElementById('modal-activation-success');
+        if (!modal) return;
+        document.getElementById('modal-cust-id').textContent = customer.customerId;
+        document.getElementById('modal-cust-name').textContent = customer.name;
+        document.getElementById('modal-cust-email').textContent = customer.email;
+        document.getElementById('modal-cust-link').value = this.getCustomerUrl();
+        this.activeModalCustomer = customer;
+        modal.classList.remove('hidden');
+        lucide.createIcons();
+      }
+
+      closeActivationModal() {
+        var modal = document.getElementById('modal-activation-success');
+        if (modal) modal.classList.add('hidden');
+        this.activeModalCustomer = null;
+      }
+
+      copyModalLink() {
+        var linkInput = document.getElementById('modal-cust-link');
+        var self = this;
+        if (linkInput) {
+          navigator.clipboard.writeText(linkInput.value).then(function() {
+            self.showToast('Copied customer link to clipboard!', 'success');
+          }).catch(function() {
+            prompt('Customer link (copy below):', linkInput.value);
+          });
+        }
+      }
+
+      copyWelcomeMessage() {
+        var c = this.activeModalCustomer || {};
+        var name = c.name || 'Shopkeeper';
+        var email = c.email || 'your registered Gmail';
+        var url = this.getCustomerUrl();
+        var self = this;
+
+        var message = 'Hi ' + name + ',\n\n' +
+          'Your Bikri Hub account is now active! 🎉\n\n' +
+          '1. Open your Bikri Hub app here:\n' + url + '\n\n' +
+          '2. Click "Continue with Google" and sign in using your registered Gmail:\n' + email + '\n\n' +
+          'You are all set to record orders, track COD collections, and calculate courier profits!';
+
+        navigator.clipboard.writeText(message).then(function() {
+          self.showToast('Copied ready-to-send welcome message!', 'success');
+        }).catch(function() {
+          prompt('Ready-to-send message (copy below):', message);
+        });
+      }
+
+      shareCustomerModal(customerId, name, email) {
+        this.showActivationModal({
+          customerId: customerId,
+          name: name,
+          email: email,
+          status: 'ACTIVE'
+        });
       }
 
       loginWithTestToken() {
@@ -372,15 +503,18 @@
             ? '<button onclick="adminApp.setCustomerStatus(\'' + c.customerId + '\', \'INACTIVE\')" class="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 font-semibold text-xs border border-red-200 rounded-lg">Deactivate</button>'
             : '<button onclick="adminApp.setCustomerStatus(\'' + c.customerId + '\', \'ACTIVE\')" class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs border border-emerald-200 rounded-lg">Activate</button>';
 
+          var shareBtn = '<button onclick="adminApp.shareCustomerModal(\'' + c.customerId + '\', \'' + self.escapeHtml(c.name) + '\', \'' + self.escapeHtml(c.email) + '\')" class="px-2.5 py-1 bg-brand-50 hover:bg-brand-100 text-brand-700 font-semibold text-xs border border-brand-200 rounded-lg flex items-center space-x-1" title="Share link or welcome message with this customer"><i data-lucide="share-2" class="w-3 h-3"></i><span>Share Link</span></button>';
+
           return '<tr>' +
             '<td class="p-3 font-bold text-gray-900 font-mono text-xs">' + self.escapeHtml(c.customerId) + '</td>' +
             '<td class="p-3 font-semibold text-gray-800">' + self.escapeHtml(c.name) + '</td>' +
             '<td class="p-3 text-gray-600 font-mono text-xs">' + self.escapeHtml(c.email) + '</td>' +
             '<td class="p-3 text-center">' + statusBadge + '</td>' +
             '<td class="p-3 text-gray-500 text-xs">' + self.escapeHtml(c.date || '—') + '</td>' +
-            '<td class="p-3 text-right">' + actionBtn + '</td>' +
+            '<td class="p-3 text-right"><div class="flex items-center justify-end space-x-1.5">' + actionBtn + shareBtn + '</div></td>' +
           '</tr>';
         }).join('');
+        lucide.createIcons();
       }
 
       async handleAddCustomer(e) {
@@ -398,7 +532,8 @@
         if (!url || url === 'YOUR_APPS_SCRIPT_URL') {
           // Local fallback simulation
           var nextId = 'CUST-' + String(this.customers.length + 1).padStart(3, '0');
-          this.customers.push({ customerId: nextId, name: name, email: email, status: 'ACTIVE', date: new Date().toLocaleDateString() });
+          var simCust = { customerId: nextId, name: name, email: email, status: 'ACTIVE', date: new Date().toLocaleDateString() };
+          this.customers.push(simCust);
           this.renderCustomersTable(this.customers);
           document.getElementById('cust-name').value = '';
           document.getElementById('cust-email').value = '';
@@ -406,6 +541,7 @@
           btn.innerHTML = '<i data-lucide="user-plus" class="w-4 h-4"></i><span>Activate Customer</span>';
           lucide.createIcons();
           this.showToast('Customer added successfully', 'success');
+          this.showActivationModal(simCust);
           return;
         }
 
@@ -427,6 +563,7 @@
             document.getElementById('cust-name').value = '';
             document.getElementById('cust-email').value = '';
             this.loadCustomers();
+            this.showActivationModal(data.customer);
           } else {
             this.showToast((data && data.error) ? data.error : 'Failed to add customer', 'error');
           }
