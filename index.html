@@ -14,6 +14,8 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
   <!-- Lucide Icons (pinned to verified version with correct UMD path) -->
   <script src="https://unpkg.com/lucide@0.394.0/dist/umd/lucide.min.js"></script>
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 
   <script>
     tailwind.config = {
@@ -53,6 +55,33 @@
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans antialiased min-h-screen">
 
+  <!-- AUTHENTICATION GATEKEEPER OVERLAY -->
+  <div id="auth-gate-modal" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white max-w-md w-full rounded-2xl p-6 sm:p-8 shadow-2xl text-center space-y-4">
+      <div class="w-14 h-14 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+        <div class="bg-brand-600 text-white p-2 rounded-xl font-black text-xl leading-none">BH</div>
+      </div>
+      <div>
+        <h1 class="text-xl font-bold text-gray-900">Welcome to Bikri Hub</h1>
+        <p class="text-xs text-gray-500 mt-1">Please sign in with your licensed Google account to access your orders.</p>
+      </div>
+
+      <!-- Google Sign In Button Container -->
+      <div id="g_id_signin_container" class="pt-2 flex justify-center"></div>
+
+      <!-- Dev / Test Token Sign In -->
+      <div class="pt-3 border-t border-gray-100 text-left">
+        <div class="text-[11px] text-gray-400 font-medium mb-1">Developer / Test Token:</div>
+        <div class="flex space-x-2">
+          <input type="email" id="test-login-email" placeholder="e.g. ramu@gmail.com" class="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-lg outline-none focus:ring-1 focus:ring-brand-500">
+          <button onclick="app.loginWithTestToken()" class="px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-semibold hover:bg-brand-700">Sign In</button>
+        </div>
+      </div>
+
+      <div id="auth-gate-error" class="hidden text-xs text-red-600 bg-red-50 p-3 rounded-lg border border-red-200 text-left font-medium"></div>
+    </div>
+  </div>
+
   <!-- TOP HEADER -->
   <header class="bg-white border-b border-gray-200 sticky top-0 z-30">
     <div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
@@ -60,14 +89,24 @@
         <div class="bg-brand-600 text-white p-1.5 rounded-lg font-bold text-lg leading-none">BH</div>
         <span class="font-bold text-gray-900 tracking-tight text-lg">Bikri Hub</span>
         <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium border border-gray-200">v1.0</span>
+        <div id="user-badge" class="hidden md:flex items-center space-x-1.5 text-xs bg-brand-50 text-brand-800 border border-brand-200 px-2.5 py-0.5 rounded-full font-semibold ml-2">
+          <i data-lucide="user" class="w-3.5 h-3.5 text-brand-600"></i>
+          <span id="user-badge-name">Customer</span>
+        </div>
       </div>
       <div class="flex items-center space-x-2">
+        <a id="header-admin-link" href="admin.html" class="hidden text-xs bg-brand-50 hover:bg-brand-100 text-brand-700 font-semibold px-2.5 py-1.5 rounded-lg border border-brand-200 flex items-center space-x-1">
+          <i data-lucide="shield" class="w-3.5 h-3.5"></i><span>Admin</span>
+        </a>
         <button onclick="app.syncGoogleSheets()" title="Sync to Google Sheets" aria-label="Sync to Google Sheets" class="p-2 text-gray-600 hover:text-brand-600 rounded-lg hover:bg-gray-100 relative">
           <i data-lucide="refresh-cw" class="w-5 h-5"></i>
           <span id="sync-indicator" class="hidden absolute top-1.5 right-1.5 w-2 h-2 bg-amber-500 rounded-full"></span>
         </button>
         <button onclick="app.openSettingsModal()" title="Settings & Backup" aria-label="Settings & Backup" class="p-2 text-gray-600 hover:text-brand-600 rounded-lg hover:bg-gray-100">
           <i data-lucide="settings" class="w-5 h-5"></i>
+        </button>
+        <button id="header-signout-btn" onclick="app.signOut()" title="Sign Out" aria-label="Sign Out" class="hidden p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-gray-100">
+          <i data-lucide="log-out" class="w-5 h-5"></i>
         </button>
       </div>
     </div>
@@ -340,6 +379,10 @@
           </div>
         </div>
         <input type="url" id="setting-gsheet-url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+        <div>
+          <label for="setting-google-client-id" class="block text-xs font-semibold text-gray-700 mt-2 mb-1">Google OAuth Client ID (Optional for Live Google Sign-In)</label>
+          <input type="text" id="setting-google-client-id" placeholder="e.g. 123456789-xxxx.apps.googleusercontent.com" class="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+        </div>
         <p class="text-[10px] text-gray-500">Your orders are also backed up to your Google Sheet, so they are not dependent only on this browser/device. You remain responsible for your Google account.</p>
 
         <!-- Setup instructions -->
@@ -535,45 +578,204 @@
       constructor() {
         this.orders = [];
         this.syncQueue = [];    // Array of { action: 'upsert'|'delete', orderId: string, data: object|null }
-        this.settings = { googleSheetUrl: '' };
+        this.settings = { googleSheetUrl: '', googleClientId: '' };
         this.currentTab = 'dashboard';
         this.selectedCodOrders = new Set();
         this.isSubmitting = false;
         this.isSyncing = false;
+        this.currentUser = null;
+        this.idToken = localStorage.getItem('bikri_hub_user_token') || '';
 
         this.init();
       }
 
       init() {
-        this.loadLocalData();
+        this.loadSettings();
         this.setupEventListeners();
+        this.initAuth();
+        lucide.createIcons();
+      }
+
+      // ── Customer Scoped Storage Keys ──
+      getOrdersKey() {
+        return this.currentUser ? (STORAGE_KEY_ORDERS + '_' + this.currentUser.id) : STORAGE_KEY_ORDERS;
+      }
+
+      getSyncQueueKey() {
+        return this.currentUser ? (STORAGE_KEY_SYNC_QUEUE + '_' + this.currentUser.id) : STORAGE_KEY_SYNC_QUEUE;
+      }
+
+      loadSettings() {
+        try {
+          var loadedSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
+          this.settings = loadedSettings ? JSON.parse(loadedSettings) : { googleSheetUrl: '', googleClientId: '' };
+        } catch (e) {
+          this.settings = { googleSheetUrl: '', googleClientId: '' };
+        }
+      }
+
+      // ── Authentication & Gatekeeper ──
+      initAuth() {
+        var self = this;
+        if (window.google && window.google.accounts && this.settings.googleClientId) {
+          try {
+            google.accounts.id.initialize({
+              client_id: this.settings.googleClientId,
+              callback: function(res) { self.handleGoogleCredential(res); }
+            });
+            google.accounts.id.renderButton(
+              document.getElementById('g_id_signin_container'),
+              { theme: 'outline', size: 'large', text: 'continue_with', shape: 'pill' }
+            );
+          } catch (e) {
+            console.warn('Google Identity Services initialization:', e);
+          }
+        }
+
+        if (this.idToken) {
+          this.verifySession();
+        } else {
+          this.lockApp();
+        }
+      }
+
+      loginWithTestToken() {
+        var email = document.getElementById('test-login-email').value.trim();
+        if (!email) {
+          this.showAuthError('Please enter a Gmail address.');
+          return;
+        }
+        this.idToken = 'test:' + email;
+        localStorage.setItem('bikri_hub_user_token', this.idToken);
+        this.verifySession();
+      }
+
+      handleGoogleCredential(response) {
+        if (!response || !response.credential) return;
+        this.idToken = response.credential;
+        localStorage.setItem('bikri_hub_user_token', this.idToken);
+        this.verifySession();
+      }
+
+      async verifySession() {
+        var errEl = document.getElementById('auth-gate-error');
+        if (errEl) errEl.classList.add('hidden');
+
+        var url = this.settings.googleSheetUrl;
+        if (!url) {
+          // If Google Sheet backend is not yet linked, unlock in local dev mode
+          var testEmail = (this.idToken.indexOf('test:') === 0 ? this.idToken.substring(5) : 'owner@bikrihub.com');
+          this.unlockApp({ id: 'LOCAL-001', name: testEmail.split('@')[0], email: testEmail, status: 'ACTIVE' }, true);
+          return;
+        }
+
+        try {
+          var fetchUrl = url + (url.indexOf('?') === -1 ? '?' : '&') + 'action=verify_session&idToken=' + encodeURIComponent(this.idToken);
+          var res = await fetch(fetchUrl);
+          var data = await res.json();
+
+          if (data && data.success && data.authorized) {
+            this.unlockApp(data.customer || { id: 'CUST-001', name: 'Customer', status: 'ACTIVE' }, !!data.isAdmin);
+          } else {
+            var msg = (data && data.error) ? data.error : 'Access Denied: No active license registered.';
+            this.showAuthError(msg);
+            this.lockApp();
+          }
+        } catch (e) {
+          console.error('Session verify error:', e);
+          if (this.idToken.indexOf('test:') === 0) {
+            var testMail = this.idToken.substring(5);
+            var isAdm = testMail.indexOf('admin') !== -1 || testMail.indexOf('owner') !== -1;
+            this.unlockApp({ id: 'CUST-DEV', name: testMail.split('@')[0], email: testMail, status: 'ACTIVE' }, isAdm);
+          } else {
+            this.showAuthError('Could not verify license with server. Please check your connection.');
+            this.lockApp();
+          }
+        }
+      }
+
+      showAuthError(msg) {
+        var errEl = document.getElementById('auth-gate-error');
+        if (errEl) {
+          errEl.textContent = msg;
+          errEl.classList.remove('hidden');
+        }
+      }
+
+      lockApp() {
+        var overlay = document.getElementById('auth-gate-modal');
+        if (overlay) overlay.classList.remove('hidden');
+        var userBadge = document.getElementById('user-badge');
+        if (userBadge) userBadge.classList.add('hidden');
+        var adminLink = document.getElementById('header-admin-link');
+        if (adminLink) adminLink.classList.add('hidden');
+        var signoutBtn = document.getElementById('header-signout-btn');
+        if (signoutBtn) signoutBtn.classList.add('hidden');
+      }
+
+      unlockApp(customer, isAdmin) {
+        this.currentUser = customer;
+        var overlay = document.getElementById('auth-gate-modal');
+        if (overlay) overlay.classList.add('hidden');
+
+        var userBadge = document.getElementById('user-badge');
+        var badgeName = document.getElementById('user-badge-name');
+        if (userBadge && badgeName) {
+          badgeName.textContent = (customer.name || customer.email) + ' (' + customer.id + ')';
+          userBadge.classList.remove('hidden');
+        }
+
+        var adminLink = document.getElementById('header-admin-link');
+        if (adminLink) adminLink.classList.toggle('hidden', !isAdmin);
+
+        var signoutBtn = document.getElementById('header-signout-btn');
+        if (signoutBtn) signoutBtn.classList.remove('hidden');
+
+        this.loadLocalData();
         this.switchTab('dashboard');
         lucide.createIcons();
+      }
+
+      signOut() {
+        this.idToken = '';
+        this.currentUser = null;
+        localStorage.removeItem('bikri_hub_user_token');
+        this.lockApp();
+        this.showToast('Signed out successfully', 'info');
       }
 
       // ── Data Persistence ──
       loadLocalData() {
         try {
-          var loadedOrders = localStorage.getItem(STORAGE_KEY_ORDERS);
+          var ordersKey = this.getOrdersKey();
+          var loadedOrders = localStorage.getItem(ordersKey);
+
+          // Preserve legacy orders if first time logging in as this customer
+          if (!loadedOrders) {
+            var legacy = localStorage.getItem(STORAGE_KEY_ORDERS);
+            if (legacy) {
+              loadedOrders = legacy;
+              localStorage.setItem(ordersKey, legacy);
+            }
+          }
+
           this.orders = loadedOrders ? JSON.parse(loadedOrders) : [];
           if (!Array.isArray(this.orders)) this.orders = [];
 
-          var loadedQueue = localStorage.getItem(STORAGE_KEY_SYNC_QUEUE);
+          var queueKey = this.getSyncQueueKey();
+          var loadedQueue = localStorage.getItem(queueKey);
           this.syncQueue = loadedQueue ? JSON.parse(loadedQueue) : [];
           if (!Array.isArray(this.syncQueue)) this.syncQueue = [];
 
           // Migrate old v1 sync queue format (bare order objects) → new v2 format
           this.syncQueue = this.syncQueue.map(function(item) {
             if (item && item.action && item.orderId) return item; // Already v2
-            // Old format: raw order object with .id
             if (item && item.id) {
               return { action: 'upsert', orderId: item.id, data: item };
             }
             return null;
           }).filter(Boolean);
 
-          var loadedSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
-          this.settings = loadedSettings ? JSON.parse(loadedSettings) : { googleSheetUrl: '' };
         } catch (e) {
           console.error('Data loading error:', e);
           this.orders = [];
@@ -584,8 +786,8 @@
 
       saveData() {
         try {
-          localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(this.orders));
-          localStorage.setItem(STORAGE_KEY_SYNC_QUEUE, JSON.stringify(this.syncQueue));
+          localStorage.setItem(this.getOrdersKey(), JSON.stringify(this.orders));
+          localStorage.setItem(this.getSyncQueueKey(), JSON.stringify(this.syncQueue));
           localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(this.settings));
         } catch (e) {
           this.showToast('Storage error — data may not have saved', 'error');
@@ -1319,7 +1521,7 @@
           return { action: 'upsert', data: item.data };
         });
 
-        var payload = { operations: operations };
+        var payload = { operations: operations, idToken: this.idToken };
 
         try {
           this.showToast('Syncing ' + operations.length + ' changes...', 'info');
@@ -1404,7 +1606,7 @@
         try {
           this.showToast('Fetching orders from Google Sheets...', 'info');
 
-          var fetchUrl = this.settings.googleSheetUrl + (this.settings.googleSheetUrl.indexOf('?') === -1 ? '?' : '&') + 'action=fetch';
+          var fetchUrl = this.settings.googleSheetUrl + (this.settings.googleSheetUrl.indexOf('?') === -1 ? '?' : '&') + 'action=fetch&idToken=' + encodeURIComponent(this.idToken);
           var response = await fetch(fetchUrl);
 
           if (!response.ok) {
@@ -1470,6 +1672,8 @@
       // ═══════════════════════
       openSettingsModal() {
         document.getElementById('setting-gsheet-url').value = this.settings.googleSheetUrl || '';
+        var clientIdEl = document.getElementById('setting-google-client-id');
+        if (clientIdEl) clientIdEl.value = this.settings.googleClientId || '';
         this.updateSheetStatus();
         document.getElementById('modal-settings').classList.remove('hidden');
         lucide.createIcons();
@@ -1502,8 +1706,11 @@
       saveSettings() {
         var newUrl = document.getElementById('setting-gsheet-url').value.trim();
         var wasConfigured = !!this.settings.googleSheetUrl;
+        var clientIdEl = document.getElementById('setting-google-client-id');
+        var newClientId = clientIdEl ? clientIdEl.value.trim() : '';
 
         this.settings.googleSheetUrl = newUrl;
+        this.settings.googleClientId = newClientId;
         this.saveData();
 
         // First connection: offer to push existing orders

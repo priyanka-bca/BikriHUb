@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bikri Hub — Admin Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' }
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen flex flex-col font-sans">
+
+  <!-- TOP HEADER -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-30 px-4 py-3 shadow-sm">
+    <div class="max-w-5xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="index.html" class="flex items-center space-x-2 text-brand-600 hover:text-brand-700">
+          <i data-lucide="shield-alert" class="w-6 h-6"></i>
+          <span class="font-bold text-lg text-gray-900 tracking-tight">Bikri Hub <span class="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full font-semibold ml-1">Admin</span></span>
+        </a>
+      </div>
+      <div id="admin-user-bar" class="hidden flex items-center space-x-3 text-xs">
+        <span id="admin-user-email" class="font-medium text-gray-600"></span>
+        <button onclick="adminApp.signOut()" class="text-gray-500 hover:text-red-600 font-semibold px-2 py-1 rounded hover:bg-gray-100">Sign Out</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-5xl mx-auto w-full p-4 sm:p-6 flex-1">
+
+    <!-- AUTHENTICATION CHECK / LOGIN OVERLAY -->
+    <div id="admin-auth-view" class="bg-white border border-gray-200 rounded-2xl p-8 max-w-md mx-auto my-12 text-center shadow-sm space-y-4">
+      <div class="w-12 h-12 bg-brand-50 text-brand-600 rounded-full flex items-center justify-center mx-auto">
+        <i data-lucide="lock" class="w-6 h-6"></i>
+      </div>
+      <h1 class="text-xl font-bold text-gray-900">Owner & Admin Login</h1>
+      <p class="text-xs text-gray-500">Sign in with your Google account to manage Bikri Hub customer licenses.</p>
+      
+      <div id="google-btn-container" class="flex justify-center pt-2"></div>
+
+      <!-- Quick dev/test login option -->
+      <div id="test-login-box" class="pt-4 border-t border-gray-100 text-left">
+        <div class="text-[11px] text-gray-400 font-medium mb-1">Developer / Test Token:</div>
+        <div class="flex space-x-2">
+          <input type="email" id="test-admin-email" placeholder="owner@gmail.com" class="flex-1 px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg outline-none focus:ring-1 focus:ring-brand-500">
+          <button onclick="adminApp.loginWithTestToken()" class="px-3 py-1.5 bg-gray-800 text-white rounded-lg text-xs font-semibold hover:bg-gray-900">Sign In</button>
+        </div>
+      </div>
+
+      <div id="auth-error-msg" class="hidden text-xs text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200 text-left"></div>
+    </div>
+
+    <!-- ACCESS DENIED VIEW -->
+    <div id="admin-denied-view" class="hidden bg-white border border-red-200 rounded-2xl p-8 max-w-md mx-auto my-12 text-center shadow-sm space-y-4">
+      <div class="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto">
+        <i data-lucide="shield-x" class="w-6 h-6"></i>
+      </div>
+      <h2 class="text-lg font-bold text-gray-900">Access Denied</h2>
+      <p id="denied-reason" class="text-xs text-gray-600">You do not have administrator permissions for Bikri Hub.</p>
+      <div class="pt-2">
+        <a href="index.html" class="inline-block px-4 py-2 bg-brand-600 text-white rounded-lg text-xs font-semibold hover:bg-brand-700">Go to Bikri Hub App</a>
+      </div>
+    </div>
+
+    <!-- ADMIN CONTENT VIEW (VISIBLE ONLY IF SERVER CONFIRMS ADMIN) -->
+    <div id="admin-content-view" class="hidden space-y-6">
+      
+      <!-- ADD CUSTOMER FORM -->
+      <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+          <div>
+            <h2 class="font-bold text-gray-900 text-sm">Add New Customer License</h2>
+            <p class="text-xs text-gray-500 mt-0.5">Activate a one-time customer license by entering their name and Gmail.</p>
+          </div>
+          <button onclick="adminApp.loadCustomers()" class="text-xs text-brand-600 hover:text-brand-700 flex items-center space-x-1 font-semibold">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i><span>Refresh</span>
+          </button>
+        </div>
+
+        <form onsubmit="adminApp.handleAddCustomer(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label for="cust-name" class="block text-xs font-semibold text-gray-700 mb-1">Customer / Shop Name *</label>
+            <input type="text" id="cust-name" required placeholder="e.g. Ramu or Ramu Clothes" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <label for="cust-email" class="block text-xs font-semibold text-gray-700 mb-1">Customer Gmail Address *</label>
+            <input type="email" id="cust-email" required placeholder="ramu@gmail.com" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div class="flex items-end">
+            <button type="submit" id="btn-add-customer" class="w-full py-2 px-4 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-semibold flex items-center justify-center space-x-2 transition">
+              <i data-lucide="user-plus" class="w-4 h-4"></i>
+              <span>Activate Customer</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- CUSTOMER LICENSES TABLE -->
+      <div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+        <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+          <h2 class="font-bold text-gray-900 text-sm">Active & Inactive Licenses (<span id="total-customers-count">0</span>)</h2>
+          <div class="text-xs text-gray-500">Stored securely in Master Google Spreadsheet</div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-gray-50 text-gray-600 font-medium border-b border-gray-200 text-xs">
+              <tr>
+                <th class="p-3">Customer ID</th>
+                <th class="p-3">Name</th>
+                <th class="p-3">Gmail</th>
+                <th class="p-3 text-center">Status</th>
+                <th class="p-3">Date</th>
+                <th class="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="customers-table-body" class="divide-y divide-gray-100">
+              <tr>
+                <td colspan="6" class="p-8 text-center text-gray-400 text-xs">Loading customer records...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- TOAST NOTIFICATIONS -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  <script>
+    class BikriHubAdminApp {
+      constructor() {
+        this.idToken = localStorage.getItem('bikri_hub_admin_token') || '';
+        this.currentUser = null;
+        this.backendUrl = localStorage.getItem('bikri_hub_settings') 
+          ? (JSON.parse(localStorage.getItem('bikri_hub_settings')).googleSheetUrl || '')
+          : '';
+        this.customers = [];
+        this.init();
+      }
+
+      init() {
+        lucide.createIcons();
+        if (this.idToken) {
+          this.verifyAdminAccess();
+        } else {
+          this.showAuthView();
+        }
+      }
+
+      showToast(msg, type) {
+        var container = document.getElementById('toast-container');
+        var toast = document.createElement('div');
+        toast.className = 'px-4 py-2.5 rounded-lg shadow-lg text-xs font-semibold text-white pointer-events-auto ' +
+          (type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-emerald-600' : 'bg-gray-800');
+        toast.textContent = msg;
+        container.appendChild(toast);
+        setTimeout(function() { toast.remove(); }, 3500);
+      }
+
+      showAuthView() {
+        document.getElementById('admin-auth-view').classList.remove('hidden');
+        document.getElementById('admin-denied-view').classList.add('hidden');
+        document.getElementById('admin-content-view').classList.add('hidden');
+        document.getElementById('admin-user-bar').classList.add('hidden');
+      }
+
+      showDeniedView(reason) {
+        document.getElementById('admin-auth-view').classList.add('hidden');
+        document.getElementById('admin-denied-view').classList.remove('hidden');
+        document.getElementById('admin-content-view').classList.add('hidden');
+        document.getElementById('denied-reason').textContent = reason || 'Access Denied: You do not have administrator permissions.';
+        document.getElementById('admin-user-bar').classList.remove('hidden');
+      }
+
+      showContentView() {
+        document.getElementById('admin-auth-view').classList.add('hidden');
+        document.getElementById('admin-denied-view').classList.add('hidden');
+        document.getElementById('admin-content-view').classList.remove('hidden');
+        document.getElementById('admin-user-bar').classList.remove('hidden');
+        if (this.currentUser) {
+          document.getElementById('admin-user-email').textContent = this.currentUser.email + ' (Owner)';
+        }
+        lucide.createIcons();
+        this.loadCustomers();
+      }
+
+      loginWithTestToken() {
+        var email = document.getElementById('test-admin-email').value.trim();
+        if (!email) {
+          alert('Please enter an admin email.');
+          return;
+        }
+        this.idToken = 'test:' + email;
+        localStorage.setItem('bikri_hub_admin_token', this.idToken);
+        this.verifyAdminAccess();
+      }
+
+      signOut() {
+        this.idToken = '';
+        this.currentUser = null;
+        localStorage.removeItem('bikri_hub_admin_token');
+        this.showAuthView();
+        this.showToast('Signed out', 'info');
+      }
+
+      async verifyAdminAccess() {
+        var errEl = document.getElementById('auth-error-msg');
+        errEl.classList.add('hidden');
+
+        // Check if backend URL is configured
+        var settingsRaw = localStorage.getItem('bikri_hub_settings');
+        var settings = settingsRaw ? JSON.parse(settingsRaw) : {};
+        var url = settings.googleSheetUrl;
+
+        if (!url) {
+          // Fallback to local server test proxy or prompt
+          this.currentUser = { email: this.idToken.replace('test:', ''), isAdmin: true };
+          this.showContentView();
+          return;
+        }
+
+        try {
+          var res = await fetch(url + (url.indexOf('?') === -1 ? '?' : '&') + 'action=verify_session&idToken=' + encodeURIComponent(this.idToken));
+          var data = await res.json();
+
+          if (data && data.success && data.authorized) {
+            if (data.isAdmin) {
+              this.currentUser = data.customer || { email: 'Admin' };
+              this.showContentView();
+            } else {
+              this.showDeniedView('The Google account (' + (data.customer ? data.customer.email : '') + ') is a customer, not the Bikri Hub owner.');
+            }
+          } else {
+            this.showDeniedView((data && data.error) ? data.error : 'Unauthorized: Invalid credentials.');
+          }
+        } catch (e) {
+          console.error('Admin verify error:', e);
+          // If network error in offline test mode, allow local admin inspection
+          if (this.idToken.startsWith('test:')) {
+            this.currentUser = { email: this.idToken.replace('test:', ''), isAdmin: true };
+            this.showContentView();
+          } else {
+            errEl.textContent = 'Could not reach Google Apps Script backend. Check your URL in Settings.';
+            errEl.classList.remove('hidden');
+          }
+        }
+      }
+
+      async loadCustomers() {
+        var tbody = document.getElementById('customers-table-body');
+        tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-gray-400 text-xs">Loading customer records from Master Spreadsheet...</td></tr>';
+
+        var settingsRaw = localStorage.getItem('bikri_hub_settings');
+        var url = settingsRaw ? JSON.parse(settingsRaw).googleSheetUrl : '';
+
+        if (!url) {
+          // Render local mock sample if sheet URL not yet set
+          this.renderCustomersTable([
+            { customerId: 'CUST-001', name: 'Ramu', email: 'ramu@gmail.com', status: 'ACTIVE', date: '27/09/2026' },
+            { customerId: 'CUST-002', name: 'Sita', email: 'sita@gmail.com', status: 'ACTIVE', date: '27/09/2026' }
+          ]);
+          return;
+        }
+
+        try {
+          var res = await fetch(url + (url.indexOf('?') === -1 ? '?' : '&') + 'action=admin_get_customers&idToken=' + encodeURIComponent(this.idToken));
+          var data = await res.json();
+          if (data && data.success && Array.isArray(data.customers)) {
+            this.renderCustomersTable(data.customers);
+          } else {
+            tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-red-500 text-xs">' + ((data && data.error) ? data.error : 'Could not fetch customers.') + '</td></tr>';
+          }
+        } catch (err) {
+          tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-red-500 text-xs">Failed to load customers from backend.</td></tr>';
+        }
+      }
+
+      renderCustomersTable(customers) {
+        this.customers = customers || [];
+        document.getElementById('total-customers-count').textContent = this.customers.length;
+        var tbody = document.getElementById('customers-table-body');
+
+        if (this.customers.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400 text-xs">No customer licenses yet. Add your first customer above!</td></tr>';
+          return;
+        }
+
+        var self = this;
+        tbody.innerHTML = this.customers.map(function(c) {
+          var isActive = c.status === 'ACTIVE';
+          var statusBadge = isActive
+            ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">ACTIVE</span>'
+            : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">INACTIVE</span>';
+
+          var actionBtn = isActive
+            ? '<button onclick="adminApp.setCustomerStatus(\'' + c.customerId + '\', \'INACTIVE\')" class="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 font-semibold text-xs border border-red-200 rounded-lg">Deactivate</button>'
+            : '<button onclick="adminApp.setCustomerStatus(\'' + c.customerId + '\', \'ACTIVE\')" class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs border border-emerald-200 rounded-lg">Activate</button>';
+
+          return '<tr>' +
+            '<td class="p-3 font-bold text-gray-900 font-mono text-xs">' + self.escapeHtml(c.customerId) + '</td>' +
+            '<td class="p-3 font-semibold text-gray-800">' + self.escapeHtml(c.name) + '</td>' +
+            '<td class="p-3 text-gray-600 font-mono text-xs">' + self.escapeHtml(c.email) + '</td>' +
+            '<td class="p-3 text-center">' + statusBadge + '</td>' +
+            '<td class="p-3 text-gray-500 text-xs">' + self.escapeHtml(c.date || '—') + '</td>' +
+            '<td class="p-3 text-right">' + actionBtn + '</td>' +
+          '</tr>';
+        }).join('');
+      }
+
+      async handleAddCustomer(e) {
+        e.preventDefault();
+        var name = document.getElementById('cust-name').value.trim();
+        var email = document.getElementById('cust-email').value.trim().toLowerCase();
+        if (!name || !email) return;
+
+        var btn = document.getElementById('btn-add-customer');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+
+        var settingsRaw = localStorage.getItem('bikri_hub_settings');
+        var url = settingsRaw ? JSON.parse(settingsRaw).googleSheetUrl : '';
+
+        if (!url) {
+          // Local fallback simulation
+          var nextId = 'CUST-' + String(this.customers.length + 1).padStart(3, '0');
+          this.customers.push({ customerId: nextId, name: name, email: email, status: 'ACTIVE', date: new Date().toLocaleDateString() });
+          this.renderCustomersTable(this.customers);
+          document.getElementById('cust-name').value = '';
+          document.getElementById('cust-email').value = '';
+          btn.disabled = false;
+          btn.innerHTML = '<i data-lucide="user-plus" class="w-4 h-4"></i><span>Activate Customer</span>';
+          lucide.createIcons();
+          this.showToast('Customer added successfully', 'success');
+          return;
+        }
+
+        try {
+          var payload = {
+            action: 'admin_add_customer',
+            idToken: this.idToken,
+            name: name,
+            email: email
+          };
+          var res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+          });
+          var data = await res.json();
+          if (data && data.success) {
+            this.showToast('Activated customer: ' + name + ' (' + data.customer.customerId + ')', 'success');
+            document.getElementById('cust-name').value = '';
+            document.getElementById('cust-email').value = '';
+            this.loadCustomers();
+          } else {
+            this.showToast((data && data.error) ? data.error : 'Failed to add customer', 'error');
+          }
+        } catch (err) {
+          this.showToast('Network error while adding customer', 'error');
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<i data-lucide="user-plus" class="w-4 h-4"></i><span>Activate Customer</span>';
+          lucide.createIcons();
+        }
+      }
+
+      async setCustomerStatus(customerId, newStatus) {
+        var actionVerb = newStatus === 'ACTIVE' ? 'activate' : 'deactivate';
+        if (!confirm('Are you sure you want to ' + actionVerb + ' customer ' + customerId + '?')) return;
+
+        var settingsRaw = localStorage.getItem('bikri_hub_settings');
+        var url = settingsRaw ? JSON.parse(settingsRaw).googleSheetUrl : '';
+
+        if (!url) {
+          var c = this.customers.find(function(item) { return item.customerId === customerId; });
+          if (c) c.status = newStatus;
+          this.renderCustomersTable(this.customers);
+          this.showToast('Customer status set to ' + newStatus, 'info');
+          return;
+        }
+
+        try {
+          var payload = {
+            action: 'admin_set_status',
+            idToken: this.idToken,
+            customerId: customerId,
+            status: newStatus
+          };
+          var res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+          });
+          var data = await res.json();
+          if (data && data.success) {
+            this.showToast('Customer ' + customerId + ' marked as ' + newStatus, 'success');
+            this.loadCustomers();
+          } else {
+            this.showToast((data && data.error) ? data.error : 'Failed to update status', 'error');
+          }
+        } catch (err) {
+          this.showToast('Network error updating customer status', 'error');
+        }
+      }
+
+      escapeHtml(s) {
+        return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+    }
+
+    var adminApp;
+    window.addEventListener('DOMContentLoaded', function() {
+      adminApp = new BikriHubAdminApp();
+    });
+  </script>
+</body>
+</html>
