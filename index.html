@@ -584,36 +584,7 @@
 
       // ── Authentication & Gatekeeper ──
       initAuth() {
-        var self = this;
-        var clientId = this.settings.googleClientId;
-
-        // 1. Initialize official Google Identity Services
-        if (window.google && window.google.accounts && clientId && clientId !== 'YOUR_GOOGLE_CLIENT_ID') {
-          try {
-            google.accounts.id.initialize({
-              client_id: clientId,
-              callback: function(res) { self.handleGoogleCredential(res); }
-            });
-            var container = document.getElementById('g_id_signin_container');
-            if (container) {
-              container.innerHTML = '';
-              google.accounts.id.renderButton(container, {
-                theme: 'outline',
-                size: 'large',
-                text: 'continue_with',
-                shape: 'pill',
-                width: 280
-              });
-            }
-          } catch (e) {
-            console.warn('Google Identity Services initialization warning:', e);
-          }
-        } else if (!clientId || clientId === 'YOUR_GOOGLE_CLIENT_ID') {
-          var container = document.getElementById('g_id_signin_container');
-          if (container) {
-            container.innerHTML = '<div class="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200">Google Client ID pending configuration.<br><span class="font-mono text-[11px]">Set YOUR_GOOGLE_CLIENT_ID in index.html</span></div>';
-          }
-        }
+        this.renderGoogleSignIn();
 
         // 2. Remembered Device / Session Check (0ms Instant App Open)
         var cachedSessionRaw = localStorage.getItem(STORAGE_KEY_SESSION);
@@ -635,6 +606,59 @@
 
         // If no cached session, lock app and wait for Google Sign-In
         this.lockApp();
+      }
+
+      renderGoogleSignIn() {
+        var self = this;
+        var clientId = this.settings.googleClientId;
+        var container = document.getElementById('g_id_signin_container');
+        if (!container) return;
+
+        if (!clientId || clientId === 'YOUR_GOOGLE_CLIENT_ID') {
+          container.innerHTML = '<div class="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200">Google Client ID pending configuration.<br><span class="font-mono text-[11px]">Set YOUR_GOOGLE_CLIENT_ID in index.html</span></div>';
+          return;
+        }
+
+        var rendered = false;
+        var tryRender = function() {
+          if (rendered) return true;
+          if (window.google && window.google.accounts && window.google.accounts.id) {
+            try {
+              google.accounts.id.initialize({
+                client_id: clientId,
+                callback: function(res) { self.handleGoogleCredential(res); }
+              });
+              container.innerHTML = '';
+              google.accounts.id.renderButton(container, {
+                theme: 'outline',
+                size: 'large',
+                text: 'continue_with',
+                shape: 'pill',
+                width: 280
+              });
+              rendered = true;
+              return true;
+            } catch (e) {
+              console.warn('Google Identity Services render warning:', e);
+            }
+          }
+          return false;
+        };
+
+        if (!tryRender()) {
+          // Show polite spinner while Google library finishes loading asynchronously
+          container.innerHTML = '<div class="flex items-center justify-center space-x-2 py-2 text-xs text-gray-500"><div class="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div><span>Loading Google Sign-In...</span></div>';
+          var attempts = 0;
+          var poll = setInterval(function() {
+            attempts++;
+            if (tryRender() || attempts > 60) {
+              clearInterval(poll);
+              if (!rendered && container.innerHTML.indexOf('animate-spin') !== -1) {
+                container.innerHTML = '<button onclick="app.renderGoogleSignIn()" class="px-4 py-2 bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-xs font-semibold">Retry Google Sign-In</button>';
+              }
+            }
+          }, 80);
+        }
       }
 
       async handleGoogleCredential(response) {
@@ -722,6 +746,7 @@
           errEl.textContent = msg;
           errEl.classList.remove('hidden');
         }
+        this.renderGoogleSignIn();
       }
 
       lockApp() {

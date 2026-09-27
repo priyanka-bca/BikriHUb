@@ -297,14 +297,23 @@
       initGoogleSignIn() {
         var self = this;
         var clientId = this.googleClientId;
-        if (window.google && window.google.accounts && clientId && clientId !== 'YOUR_GOOGLE_CLIENT_ID') {
-          try {
-            google.accounts.id.initialize({
-              client_id: clientId,
-              callback: function(res) { self.handleGoogleCredential(res); }
-            });
-            var container = document.getElementById('google-btn-container');
-            if (container) {
+        var container = document.getElementById('google-btn-container');
+        if (!container) return;
+
+        if (!clientId || clientId === 'YOUR_GOOGLE_CLIENT_ID') {
+          container.innerHTML = '<div class="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200">Google Client ID pending configuration.</div>';
+          return;
+        }
+
+        var rendered = false;
+        var tryRender = function() {
+          if (rendered) return true;
+          if (window.google && window.google.accounts && window.google.accounts.id) {
+            try {
+              google.accounts.id.initialize({
+                client_id: clientId,
+                callback: function(res) { self.handleGoogleCredential(res); }
+              });
               container.innerHTML = '';
               google.accounts.id.renderButton(container, {
                 theme: 'outline',
@@ -313,10 +322,27 @@
                 shape: 'pill',
                 width: 280
               });
+              rendered = true;
+              return true;
+            } catch(e) {
+              console.warn('Google Identity Services admin init error:', e);
             }
-          } catch(e) {
-            console.warn('Google Identity Services admin init error:', e);
           }
+          return false;
+        };
+
+        if (!tryRender()) {
+          container.innerHTML = '<div class="flex items-center justify-center space-x-2 py-2 text-xs text-gray-500"><div class="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div><span>Loading Google Sign-in...</span></div>';
+          var attempts = 0;
+          var poll = setInterval(function() {
+            attempts++;
+            if (tryRender() || attempts > 60) {
+              clearInterval(poll);
+              if (!rendered && container.innerHTML.indexOf('animate-spin') !== -1) {
+                container.innerHTML = '<button onclick="adminApp.initGoogleSignIn()" class="px-4 py-2 bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-xs font-semibold">Retry Loading Google Sign-In</button>';
+              }
+            }
+          }, 80);
         }
       }
 
