@@ -345,6 +345,91 @@ function doPost(e) {
       return jsonResponse({ success: true, customerId: targetId, status: targetStatus });
     }
 
+    // ── Admin: Edit Customer (Name & Gmail) ──
+    if (payload.action === 'admin_edit_customer') {
+      if (!auth.isAdmin) {
+        return jsonResponse({ success: false, error: 'Forbidden: Admin access only.' });
+      }
+      var targetId = String(payload.customerId || '').trim();
+      var newName = String(payload.name || '').trim();
+      var newEmail = String(payload.email || '').trim().toLowerCase();
+
+      if (!targetId || !newName || !newEmail || newEmail.indexOf('@') === -1) {
+        return jsonResponse({ success: false, error: 'Customer ID, Name, and a valid Gmail are required.' });
+      }
+
+      var lSheet = getOrCreateLicensesSheet();
+      var lData = lSheet.getDataRange().getValues();
+      var foundRow = -1;
+
+      // Check existence and verify Gmail uniqueness across OTHER customers
+      for (var m = 1; m < lData.length; m++) {
+        var rowId = String(lData[m][0]).trim();
+        var rowEmail = String(lData[m][2] || '').trim().toLowerCase();
+
+        if (rowId === targetId) {
+          foundRow = m + 1; // 1-based row index
+        } else if (rowEmail === newEmail) {
+          return jsonResponse({ success: false, error: 'The Gmail address ' + newEmail + ' is already assigned to ' + rowId + '.' });
+        }
+      }
+
+      if (foundRow === -1) {
+        return jsonResponse({ success: false, error: 'Customer ID not found.' });
+      }
+
+      // Column 2 = Name, Column 3 = Gmail
+      lSheet.getRange(foundRow, 2).setValue(newName);
+      lSheet.getRange(foundRow, 3).setValue(newEmail);
+
+      return jsonResponse({
+        success: true,
+        customer: { customerId: targetId, name: newName, email: newEmail }
+      });
+    }
+
+    // ── Admin: Delete Customer ──
+    if (payload.action === 'admin_delete_customer') {
+      if (!auth.isAdmin) {
+        return jsonResponse({ success: false, error: 'Forbidden: Admin access only.' });
+      }
+      var targetId = String(payload.customerId || '').trim();
+      if (!targetId) {
+        return jsonResponse({ success: false, error: 'Customer ID is required.' });
+      }
+
+      var lSheet = getOrCreateLicensesSheet();
+      var lData = lSheet.getDataRange().getValues();
+      var foundRow = -1;
+
+      for (var m = 1; m < lData.length; m++) {
+        if (String(lData[m][0]).trim() === targetId) {
+          foundRow = m + 1; // 1-based row index
+          break;
+        }
+      }
+
+      if (foundRow === -1) {
+        return jsonResponse({ success: false, error: 'Customer ID not found.' });
+      }
+
+      // Delete license record from Licenses sheet
+      lSheet.deleteRow(foundRow);
+
+      // Delete customer's isolated orders partition if it exists
+      try {
+        var ss = SpreadsheetApp.getActiveSpreadsheet();
+        var custSheet = ss.getSheetByName('Orders_' + targetId);
+        if (custSheet) {
+          ss.deleteSheet(custSheet);
+        }
+      } catch (sheetErr) {
+        // Non-critical: sheet deletion error should not block license revocation
+      }
+
+      return jsonResponse({ success: true, customerId: targetId });
+    }
+
     // ── Customer Order Sync (Strictly Customer-Isolated) ──
     var operations = payload.operations;
     if (!Array.isArray(operations) || operations.length === 0) {
