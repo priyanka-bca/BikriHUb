@@ -8,11 +8,161 @@
   <meta http-equiv="Expires" content="0">
   <title>Bikri Hub — Order Management for Social Sellers</title>
 
+  <!-- ================= BIKRI HUB BROWSER-LOCK GATE ================= -->
+  <style>
+    /* Prevent UI flashing while verifying license with Supabase */
+    .bikri-auth-loading body {
+      display: none !important;
+    }
+  </style>
+  <script>
+    (async function () {
+      // Hide body immediately during check
+      document.documentElement.classList.add('bikri-auth-loading');
+
+      const SUPABASE_URL = 'https://cbvmprccxgsxotgxycoe.supabase.co';
+      const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNidm1wcmNjeGdzeG90Z3h5Y29lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0MzM5MjAsImV4cCI6MjEwNjAwOTkyMH0.gnSG14s0MWTegFgz0vtu82ZPTfC-z421dwAdNo9XswQ';
+
+      // 1. Get or generate persistent browser fingerprint ID
+      let browserId = localStorage.getItem('bikri_browser_uuid');
+      if (!browserId) {
+        browserId = 'b_' + (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36));
+        localStorage.setItem('bikri_browser_uuid', browserId);
+      }
+
+      // 2. Extract license from URL parameter or saved local storage
+      const urlParams = new URLSearchParams(window.location.search);
+      const incomingLicense = urlParams.get('license');
+      const activeLicense = incomingLicense || localStorage.getItem('bikri_active_license');
+
+      if (!activeLicense) {
+        renderLockScreen('No License Found', 'Please access Bikri Hub using your authorized license link.');
+        return;
+      }
+
+      // 3. Authenticate against Supabase RPC atomically
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/verify_and_bind_browser`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({
+            p_license: activeLicense.trim(),
+            p_browser_id: browserId
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Network error during verification');
+        }
+
+        const result = await response.json();
+
+        // 4. Handle DB response
+        if (result && result.ok) {
+          // Store active license for future frictionless visits
+          localStorage.setItem('bikri_active_license', activeLicense.trim());
+
+          // Clean the license query parameter from address bar
+          if (incomingLicense) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+
+          // Unhide app and execute normally
+          document.documentElement.classList.remove('bikri-auth-loading');
+        } else {
+          // Device mismatch, revoked license, or invalid key
+          const msg = (result && result.message) ? result.message : 'Access denied.';
+          renderLockScreen('Access Denied', msg);
+        }
+      } catch (err) {
+        console.error('License verification failed:', err);
+        renderLockScreen('Verification Error', 'Unable to verify your license. Please check your internet connection.');
+      }
+
+      function renderLockScreen(title, message) {
+        document.documentElement.classList.remove('bikri-auth-loading');
+        if (window.stop) window.stop();
+
+        document.documentElement.innerHTML = `
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Bikri Hub — ${title}</title>
+            <style>
+              body {
+                margin: 0;
+                background: #f9fafb;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                padding: 20px;
+                box-sizing: border-box;
+              }
+              .card {
+                background: #ffffff;
+                max-width: 420px;
+                width: 100%;
+                border: 1px solid #e5e7eb;
+                border-radius: 16px;
+                padding: 32px 24px;
+                text-align: center;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+              }
+              .icon {
+                width: 48px;
+                height: 48px;
+                background: #fee2e2;
+                color: #dc2626;
+                border-radius: 12px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 22px;
+                font-weight: bold;
+                margin-bottom: 16px;
+              }
+              h2 {
+                margin: 0 0 8px 0;
+                color: #111827;
+                font-size: 20px;
+                font-weight: 700;
+              }
+              p {
+                margin: 0;
+                color: #4b5563;
+                font-size: 14px;
+                line-height: 1.5;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <div class="icon">!</div>
+              <h2>${title}</h2>
+              <p>${message}</p>
+            </div>
+          </body>
+          </html>
+        `;
+        throw new Error(title + ': ' + message);
+      }
+    })();
+  </script>
+  <!-- =============================================================== -->
+
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- SheetJS CDN -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
-  <!-- Lucide Icons (pinned to verified version with correct UMD path) -->
+  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@0.394.0/dist/umd/lucide.min.js"></script>
   <!-- Google Identity Services -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -372,7 +522,6 @@
       <div class="space-y-2">
         <div class="flex items-center justify-between">
           <label for="setting-gsheet-url" class="block text-xs font-semibold text-gray-700">Google Sheets Backup</label>
-          <!-- Connection status indicator -->
           <div id="gsheet-status" class="flex items-center space-x-1.5">
             <span id="gsheet-status-dot" class="w-2 h-2 rounded-full bg-gray-400"></span>
             <span id="gsheet-status-text" class="text-[10px] text-gray-500">Not configured</span>
@@ -385,7 +534,6 @@
         </div>
         <p class="text-[10px] text-gray-500">Your orders are also backed up to your Google Sheet, so they are not dependent only on this browser/device. You remain responsible for your Google account.</p>
 
-        <!-- Setup instructions -->
         <details class="text-[10px] text-gray-500 mt-1">
           <summary class="cursor-pointer font-semibold text-gray-600 hover:text-gray-800">How to set up Google Sheets backup</summary>
           <ol class="list-decimal ml-4 mt-1.5 space-y-1 text-gray-600 leading-relaxed">
@@ -403,7 +551,6 @@
           </ol>
         </details>
 
-        <!-- Google Sheets actions -->
         <div class="grid grid-cols-2 gap-2 mt-2">
           <button onclick="app.pushAllOrders()" class="px-3 py-2 border border-gray-300 text-gray-700 text-xs rounded-lg font-medium hover:bg-gray-50 flex items-center justify-center space-x-1">
             <i data-lucide="upload" class="w-3.5 h-3.5"></i>
@@ -463,21 +610,12 @@
 
   <!-- APP ENGINE LOGIC -->
   <script>
-    /**
-     * BIKRI HUB v1.0 — FINAL PRODUCTION BUILD
-     * Order Management for Nepali Social-Commerce Sellers
-     *
-     * Architecture:
-     *   Bikri Hub → Local Storage (fast daily use)
-     *             → Google Apps Script → Google Sheet (persistent cloud backup)
-     */
     const STORAGE_KEY_ORDERS = 'bikri_hub_orders_v1';
-    const STORAGE_KEY_SYNC_QUEUE = 'bikri_hub_sync_queue_v2'; // v2: new action-based format
+    const STORAGE_KEY_SYNC_QUEUE = 'bikri_hub_sync_queue_v2';
     const STORAGE_KEY_SETTINGS = 'bikri_hub_settings_v1';
 
     const STATUSES = ['PENDING', 'PROCESSING', 'DISPATCHED', 'DELIVERED', 'RETURNED', 'CANCELLED'];
 
-    // ── Utility: HTML Escaping ──
     function escapeHtml(str) {
       if (str == null) return '';
       return String(str)
@@ -488,7 +626,6 @@
         .replace(/'/g, '&#039;');
     }
 
-    // ── CSV field escaping (RFC 4180) ──
     function escapeCSVField(value) {
       var str = String(value == null ? '' : value);
       if (str.indexOf(',') !== -1 || str.indexOf('"') !== -1 || str.indexOf('\n') !== -1 || str.indexOf('\r') !== -1) {
@@ -497,7 +634,6 @@
       return str;
     }
 
-    // ── Collision-resistant Order ID ──
     var _orderSeqCounter = Math.floor(Math.random() * 1000);
     function generateOrderId() {
       var now = new Date();
@@ -510,7 +646,6 @@
       return 'ORD-' + datePart + '-' + timePart + '-' + seq + rand;
     }
 
-    // ── Phone validation for Nepal mobile ──
     function validatePhone(phone) {
       var str = String(phone == null ? '' : phone).trim();
       if (!str) {
@@ -528,7 +663,6 @@
       return { valid: true, normalized: str };
     }
 
-    // ── Build WhatsApp-ready phone number ──
     function getWhatsAppNumber(phone) {
       var cleaned = String(phone || '').replace(/[\s\-\(\)\.+]/g, '');
       if (cleaned.startsWith('977') && cleaned.length === 13) return cleaned;
@@ -536,7 +670,6 @@
       return cleaned;
     }
 
-    // ── Validate a single order object for import ──
     function validateOrderForImport(o) {
       if (!o || typeof o !== 'object') return null;
       if (typeof o.id !== 'string' || !o.id.trim()) return null;
@@ -570,10 +703,6 @@
       };
     }
 
-
-    // ═══════════════════════════════════════════════════
-    //  BIKRI HUB APPLICATION CLASS
-    // ═══════════════════════════════════════════════════
     class BikriHubApp {
       constructor() {
         this.orders = [];
@@ -767,7 +896,6 @@
           this.syncQueue = loadedQueue ? JSON.parse(loadedQueue) : [];
           if (!Array.isArray(this.syncQueue)) this.syncQueue = [];
 
-          // Migrate old v1 sync queue format (bare order objects) → new v2 format
           this.syncQueue = this.syncQueue.map(function(item) {
             if (item && item.action && item.orderId) return item; // Already v2
             if (item && item.id) {
@@ -817,7 +945,6 @@
         }, 3000);
       }
 
-      // ── Tab Navigation ──
       switchTab(tabName) {
         this.currentTab = tabName;
         var tabs = ['dashboard', 'orders', 'cod', 'returns', 'couriers'];
@@ -852,9 +979,6 @@
         lucide.createIcons();
       }
 
-      // ═══════════════════════
-      //  DASHBOARD
-      // ═══════════════════════
       renderDashboard() {
         var deliveredRevenue = 0, netProfit = 0, uncollectedCod = 0;
         var uncollectedCount = 0, activeProjectedProfit = 0, activeCount = 0;
@@ -895,9 +1019,6 @@
         }).join('');
       }
 
-      // ═══════════════════════
-      //  ORDER MANAGEMENT
-      // ═══════════════════════
       renderOrders() {
         var container = document.getElementById('orders-list');
         var query = (document.getElementById('order-search').value || '').toLowerCase().trim();
@@ -1003,7 +1124,6 @@
         }
       }
 
-      // ── Order Modal ──
       openOrderModal(orderId) {
         var modal = document.getElementById('modal-order');
         var form = document.getElementById('order-form');
@@ -1190,7 +1310,6 @@
         }
 
         if (id) {
-          // ── EDIT existing order ──
           var index = this.orders.findIndex(function(o) { return o.id === id; });
           if (index === -1) {
             this.isSubmitting = false;
@@ -1224,7 +1343,6 @@
           this.queueSync(updated);
           this.showToast('Order updated successfully', 'success');
         } else {
-          // ── CREATE new order ──
           var newOrder = {
             id: generateOrderId(), customerName: customerName, phone: phone, courier: courier,
             address: address, codAmount: codAmount, costPrice: costPrice, deliveryCharge: deliveryCharge,
@@ -1269,22 +1387,17 @@
       deleteOrder(orderId) {
         if (!confirm('Are you sure you want to delete order #' + orderId + '?')) return;
         this.orders = this.orders.filter(function(o) { return o.id !== orderId; });
-        // Queue delete for Google Sheets (replaces any pending upsert for this ID)
         this.queueDelete(orderId);
         this.saveData();
         this.renderCurrentTab();
         this.showToast('Order deleted', 'info');
       }
 
-      // ═══════════════════════
-      //  COD COLLECTION
-      // ═══════════════════════
       renderCOD() {
         var container = document.getElementById('cod-list');
         var batchBtn = document.getElementById('batch-collect-btn');
         var eligible = this.orders.filter(function(o) { return o.status === 'DELIVERED' && !o.codCollected; });
 
-        // Clean stale selections (orders deleted, status changed, or already collected)
         var eligibleIds = new Set(eligible.map(function(o) { return o.id; }));
         var self = this;
         this.selectedCodOrders.forEach(function(id) {
@@ -1366,9 +1479,6 @@
         this.showToast('Batch COD collection recorded', 'success');
       }
 
-      // ═══════════════════════
-      //  RETURNS
-      // ═══════════════════════
       renderReturns() {
         var container = document.getElementById('returns-list');
         var returnedOrders = this.orders.filter(function(o) { return o.status === 'RETURNED'; });
@@ -1414,9 +1524,6 @@
         }
       }
 
-      // ═══════════════════════
-      //  COURIER ANALYTICS
-      // ═══════════════════════
       renderCouriers() {
         var tableBody = document.getElementById('couriers-table-body');
         var courierStats = {};
@@ -1447,14 +1554,6 @@
         }).join('');
       }
 
-      // ═══════════════════════════════════════
-      //  SYNC QUEUE (action-based format v2)
-      // ═══════════════════════════════════════
-
-      /**
-       * Queue an upsert operation. Deduplicates by orderId.
-       * If a delete was previously queued for this ID, it's replaced with upsert.
-       */
       queueSync(order) {
         var entry = {
           action: 'upsert',
@@ -1470,9 +1569,6 @@
         this.updateSyncIndicator();
       }
 
-      /**
-       * Queue a delete operation. Replaces any pending upsert for this ID.
-       */
       queueDelete(orderId) {
         var entry = {
           action: 'delete',
@@ -1488,15 +1584,6 @@
         this.updateSyncIndicator();
       }
 
-      // ═══════════════════════════════════════
-      //  GOOGLE SHEETS SYNC
-      // ═══════════════════════════════════════
-
-      /**
-       * Batch sync: sends all pending operations to Google Apps Script.
-       * Only clears the queue when the server confirms success with zero failures.
-       * On partial failure or network error, keeps the entire queue for retry.
-       */
       async syncGoogleSheets() {
         if (!this.settings.googleSheetUrl) {
           this.showToast('Set Google Sheet URL in Settings first', 'info');
@@ -1513,7 +1600,6 @@
 
         this.isSyncing = true;
 
-        // Build batch payload
         var operations = this.syncQueue.map(function(item) {
           if (item.action === 'delete') {
             return { action: 'delete', orderId: item.orderId };
@@ -1549,13 +1635,11 @@
 
           if (result && result.success === true) {
             if (result.failed === 0 || result.failed === undefined) {
-              // All operations processed — safe to clear entire queue
               var processedCount = result.processed || operations.length;
               this.syncQueue = [];
               this.saveData();
               this.showToast('Synced ' + processedCount + ' changes to Google Sheets', 'success');
             } else {
-              // Partial failure — keep entire queue for retry (upserts are idempotent)
               this.showToast('Sync partially failed (' + result.failed + ' errors) — changes kept for retry', 'error');
             }
           } else {
@@ -1570,10 +1654,6 @@
         this.isSyncing = false;
       }
 
-      /**
-       * Push all existing local orders to Google Sheets sync queue.
-       * Used for initial backup when first connecting.
-       */
       pushAllOrders() {
         if (!this.settings.googleSheetUrl) {
           this.showToast('Set Google Sheet URL in Settings first', 'info');
@@ -1591,10 +1671,6 @@
         this.showToast('Queued ' + this.orders.length + ' orders — press the Sync button (↻) to send', 'info');
       }
 
-      /**
-       * Restore/merge orders from Google Sheets into local storage.
-       * Keeps the more recently updated version when merging.
-       */
       async restoreFromSheets() {
         if (!this.settings.googleSheetUrl) {
           this.showToast('Set Google Sheet URL in Settings first', 'info');
@@ -1642,7 +1718,6 @@
 
             var idx = self.orders.findIndex(function(o) { return o.id === validated.id; });
             if (idx !== -1) {
-              // Merge: keep the more recently updated version
               var existingDate = new Date(self.orders[idx].updatedAt || self.orders[idx].createdAt);
               var importedDate = new Date(validated.updatedAt || validated.createdAt);
               if (importedDate > existingDate) {
@@ -1667,9 +1742,6 @@
         }
       }
 
-      // ═══════════════════════
-      //  SETTINGS
-      // ═══════════════════════
       openSettingsModal() {
         document.getElementById('setting-gsheet-url').value = this.settings.googleSheetUrl || '';
         var clientIdEl = document.getElementById('setting-google-client-id');
@@ -1713,7 +1785,6 @@
         this.settings.googleClientId = newClientId;
         this.saveData();
 
-        // First connection: offer to push existing orders
         if (newUrl && !wasConfigured && this.orders.length > 0) {
           this.closeSettingsModal();
           if (confirm('Google Sheets connected! Push your ' + this.orders.length + ' existing orders to Google Sheets for backup?\n\nYou can always do this later via Settings → "Push All to Sheets".')) {
@@ -1727,9 +1798,6 @@
         this.showToast('Settings saved', 'success');
       }
 
-      // ═══════════════════════
-      //  EXPORT & RESTORE
-      // ═══════════════════════
       exportJSON() {
         var backupData = {
           schemaVersion: '1.0',
@@ -1865,9 +1933,6 @@
         }
       }
 
-      // ═══════════════════════
-      //  EVENT DELEGATION
-      // ═══════════════════════
       setupEventListeners() {
         var self = this;
 
@@ -1955,7 +2020,6 @@
       }
     }
 
-    // ── Initialize ──
     var app;
     window.addEventListener('DOMContentLoaded', function() {
       app = new BikriHubApp();
