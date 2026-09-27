@@ -1641,9 +1641,6 @@
       }
 
       openSettingsModal() {
-        document.getElementById('setting-gsheet-url').value = this.settings.googleSheetUrl || '';
-        var clientIdEl = document.getElementById('setting-google-client-id');
-        if (clientIdEl) clientIdEl.value = this.settings.googleClientId || '';
         this.updateSheetStatus();
         document.getElementById('modal-settings').classList.remove('hidden');
         lucide.createIcons();
@@ -1671,29 +1668,6 @@
           text.textContent = 'Connected';
           text.className = 'text-[10px] text-emerald-600';
         }
-      }
-
-      saveSettings() {
-        var newUrl = document.getElementById('setting-gsheet-url').value.trim();
-        var wasConfigured = !!this.settings.googleSheetUrl;
-        var clientIdEl = document.getElementById('setting-google-client-id');
-        var newClientId = clientIdEl ? clientIdEl.value.trim() : '';
-
-        this.settings.googleSheetUrl = newUrl;
-        this.settings.googleClientId = newClientId;
-        this.saveData();
-
-        if (newUrl && !wasConfigured && this.orders.length > 0) {
-          this.closeSettingsModal();
-          if (confirm('Google Sheets connected! Push your ' + this.orders.length + ' existing orders to Google Sheets for backup?\n\nYou can always do this later via Settings → "Push All to Sheets".')) {
-            this.pushAllOrders();
-          }
-          this.showToast('Settings saved', 'success');
-          return;
-        }
-
-        this.closeSettingsModal();
-        this.showToast('Settings saved', 'success');
       }
 
       exportJSON() {
