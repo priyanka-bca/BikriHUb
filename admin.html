@@ -144,24 +144,82 @@
   <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none"></div>
 
   <script>
+    // ══════════════════════════════════════════════════════════════════
+    // BIKRI HUB PRODUCTION CONFIGURATION
+    // ══════════════════════════════════════════════════════════════════
+    const BIKRI_CONFIG = {
+      GOOGLE_CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID',
+      APPS_SCRIPT_URL: 'YOUR_APPS_SCRIPT_URL'
+    };
+
     class BikriHubAdminApp {
       constructor() {
         this.idToken = localStorage.getItem('bikri_hub_admin_token') || '';
         this.currentUser = null;
-        this.backendUrl = localStorage.getItem('bikri_hub_settings') 
-          ? (JSON.parse(localStorage.getItem('bikri_hub_settings')).googleSheetUrl || '')
-          : '';
         this.customers = [];
+        this.backendUrl = '';
+        this.googleClientId = '';
+        this.loadConfig();
         this.init();
+      }
+
+      loadConfig() {
+        var settingsRaw = localStorage.getItem('bikri_hub_settings') || localStorage.getItem('bikri_hub_settings_v1');
+        var savedSettings = {};
+        if (settingsRaw) {
+          try { savedSettings = JSON.parse(settingsRaw); } catch(e) {}
+        }
+
+        this.backendUrl = (BIKRI_CONFIG.APPS_SCRIPT_URL && BIKRI_CONFIG.APPS_SCRIPT_URL !== 'YOUR_APPS_SCRIPT_URL')
+          ? BIKRI_CONFIG.APPS_SCRIPT_URL
+          : (savedSettings.googleSheetUrl || '');
+
+        this.googleClientId = (BIKRI_CONFIG.GOOGLE_CLIENT_ID && BIKRI_CONFIG.GOOGLE_CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID')
+          ? BIKRI_CONFIG.GOOGLE_CLIENT_ID
+          : (savedSettings.googleClientId || '');
       }
 
       init() {
         lucide.createIcons();
+        this.initGoogleSignIn();
         if (this.idToken) {
           this.verifyAdminAccess();
         } else {
           this.showAuthView();
         }
+      }
+
+      initGoogleSignIn() {
+        var self = this;
+        var clientId = this.googleClientId;
+        if (window.google && window.google.accounts && clientId && clientId !== 'YOUR_GOOGLE_CLIENT_ID') {
+          try {
+            google.accounts.id.initialize({
+              client_id: clientId,
+              callback: function(res) { self.handleGoogleCredential(res); }
+            });
+            var container = document.getElementById('google-btn-container');
+            if (container) {
+              container.innerHTML = '';
+              google.accounts.id.renderButton(container, {
+                theme: 'outline',
+                size: 'large',
+                text: 'signin_with',
+                shape: 'pill',
+                width: 280
+              });
+            }
+          } catch(e) {
+            console.warn('Google Identity Services admin init error:', e);
+          }
+        }
+      }
+
+      handleGoogleCredential(response) {
+        if (!response || !response.credential) return;
+        this.idToken = response.credential;
+        localStorage.setItem('bikri_hub_admin_token', this.idToken);
+        this.verifyAdminAccess();
       }
 
       showToast(msg, type) {
@@ -224,15 +282,17 @@
         var errEl = document.getElementById('auth-error-msg');
         errEl.classList.add('hidden');
 
-        // Check if backend URL is configured
-        var settingsRaw = localStorage.getItem('bikri_hub_settings');
-        var settings = settingsRaw ? JSON.parse(settingsRaw) : {};
-        var url = settings.googleSheetUrl;
+        var url = this.backendUrl;
 
-        if (!url) {
-          // Fallback to local server test proxy or prompt
-          this.currentUser = { email: this.idToken.replace('test:', ''), isAdmin: true };
-          this.showContentView();
+        if (!url || url === 'YOUR_APPS_SCRIPT_URL') {
+          // If in local test harness without backend URL configured
+          if (this.idToken.startsWith('test:')) {
+            this.currentUser = { email: this.idToken.replace('test:', ''), isAdmin: true };
+            this.showContentView();
+            return;
+          }
+          errEl.textContent = 'Google Apps Script URL pending. Please set YOUR_APPS_SCRIPT_URL.';
+          errEl.classList.remove('hidden');
           return;
         }
 
@@ -267,10 +327,9 @@
         var tbody = document.getElementById('customers-table-body');
         tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-gray-400 text-xs">Loading customer records from Master Spreadsheet...</td></tr>';
 
-        var settingsRaw = localStorage.getItem('bikri_hub_settings');
-        var url = settingsRaw ? JSON.parse(settingsRaw).googleSheetUrl : '';
+        var url = this.backendUrl;
 
-        if (!url) {
+        if (!url || url === 'YOUR_APPS_SCRIPT_URL') {
           // Render local mock sample if sheet URL not yet set
           this.renderCustomersTable([
             { customerId: 'CUST-001', name: 'Ramu', email: 'ramu@gmail.com', status: 'ACTIVE', date: '27/09/2026' },
@@ -334,10 +393,9 @@
         btn.disabled = true;
         btn.textContent = 'Saving...';
 
-        var settingsRaw = localStorage.getItem('bikri_hub_settings');
-        var url = settingsRaw ? JSON.parse(settingsRaw).googleSheetUrl : '';
+        var url = this.backendUrl;
 
-        if (!url) {
+        if (!url || url === 'YOUR_APPS_SCRIPT_URL') {
           // Local fallback simulation
           var nextId = 'CUST-' + String(this.customers.length + 1).padStart(3, '0');
           this.customers.push({ customerId: nextId, name: name, email: email, status: 'ACTIVE', date: new Date().toLocaleDateString() });
@@ -385,10 +443,9 @@
         var actionVerb = newStatus === 'ACTIVE' ? 'activate' : 'deactivate';
         if (!confirm('Are you sure you want to ' + actionVerb + ' customer ' + customerId + '?')) return;
 
-        var settingsRaw = localStorage.getItem('bikri_hub_settings');
-        var url = settingsRaw ? JSON.parse(settingsRaw).googleSheetUrl : '';
+        var url = this.backendUrl;
 
-        if (!url) {
+        if (!url || url === 'YOUR_APPS_SCRIPT_URL') {
           var c = this.customers.find(function(item) { return item.customerId === customerId; });
           if (c) c.status = newStatus;
           this.renderCustomersTable(this.customers);

@@ -305,6 +305,9 @@ function doPost(e) {
       var nowStr = formatDate(new Date());
 
       licSheet.appendRow([nextId, newName, newEmail, 'ACTIVE', nowStr]);
+      // Pre-create and initialize the customer's isolated orders partition
+      getOrCreateCustomerOrdersSheet(nextId);
+
       return jsonResponse({
         success: true,
         customer: { customerId: nextId, name: newName, email: newEmail, status: 'ACTIVE', date: nowStr }

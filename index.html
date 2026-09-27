@@ -8,155 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>Bikri Hub — Order Management for Social Sellers</title>
 
-  <!-- ================= BIKRI HUB BROWSER-LOCK GATE ================= -->
-  <style>
-    /* Prevent UI flashing while verifying license with Supabase */
-    .bikri-auth-loading body {
-      display: none !important;
-    }
-  </style>
-  <script>
-    (async function () {
-      // Hide body immediately during check
-      document.documentElement.classList.add('bikri-auth-loading');
 
-      const SUPABASE_URL = 'https://cbvmprccxgsxotgxycoe.supabase.co';
-      const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNidm1wcmNjeGdzeG90Z3h5Y29lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0MzM5MjAsImV4cCI6MjEwNjAwOTkyMH0.gnSG14s0MWTegFgz0vtu82ZPTfC-z421dwAdNo9XswQ';
-
-      // 1. Get or generate persistent browser fingerprint ID
-      let browserId = localStorage.getItem('bikri_browser_uuid');
-      if (!browserId) {
-        browserId = 'b_' + (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36));
-        localStorage.setItem('bikri_browser_uuid', browserId);
-      }
-
-      // 2. Extract license from URL parameter or saved local storage
-      const urlParams = new URLSearchParams(window.location.search);
-      const incomingLicense = urlParams.get('license');
-      const activeLicense = incomingLicense || localStorage.getItem('bikri_active_license');
-
-      if (!activeLicense) {
-        renderLockScreen('No License Found', 'Please access Bikri Hub using your authorized license link.');
-        return;
-      }
-
-      // 3. Authenticate against Supabase RPC atomically
-      try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/verify_and_bind_browser`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify({
-            p_license: activeLicense.trim(),
-            p_browser_id: browserId
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error('Network error during verification');
-        }
-
-        const result = await response.json();
-
-        // 4. Handle DB response
-        if (result && result.ok) {
-          // Store active license for future frictionless visits
-          localStorage.setItem('bikri_active_license', activeLicense.trim());
-
-          // Clean the license query parameter from address bar
-          if (incomingLicense) {
-            window.history.replaceState({}, document.title, window.location.pathname);
-          }
-
-          // Unhide app and execute normally
-          document.documentElement.classList.remove('bikri-auth-loading');
-        } else {
-          // Device mismatch, revoked license, or invalid key
-          const msg = (result && result.message) ? result.message : 'Access denied.';
-          renderLockScreen('Access Denied', msg);
-        }
-      } catch (err) {
-        console.error('License verification failed:', err);
-        renderLockScreen('Verification Error', 'Unable to verify your license. Please check your internet connection.');
-      }
-
-      function renderLockScreen(title, message) {
-        document.documentElement.classList.remove('bikri-auth-loading');
-        if (window.stop) window.stop();
-
-        document.documentElement.innerHTML = `
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Bikri Hub — ${title}</title>
-            <style>
-              body {
-                margin: 0;
-                background: #f9fafb;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                min-height: 100vh;
-                padding: 20px;
-                box-sizing: border-box;
-              }
-              .card {
-                background: #ffffff;
-                max-width: 420px;
-                width: 100%;
-                border: 1px solid #e5e7eb;
-                border-radius: 16px;
-                padding: 32px 24px;
-                text-align: center;
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-              }
-              .icon {
-                width: 48px;
-                height: 48px;
-                background: #fee2e2;
-                color: #dc2626;
-                border-radius: 12px;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 22px;
-                font-weight: bold;
-                margin-bottom: 16px;
-              }
-              h2 {
-                margin: 0 0 8px 0;
-                color: #111827;
-                font-size: 20px;
-                font-weight: 700;
-              }
-              p {
-                margin: 0;
-                color: #4b5563;
-                font-size: 14px;
-                line-height: 1.5;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="card">
-              <div class="icon">!</div>
-              <h2>${title}</h2>
-              <p>${message}</p>
-            </div>
-          </body>
-          </html>
-        `;
-        throw new Error(title + ': ' + message);
-      }
-    })();
-  </script>
-  <!-- =============================================================== -->
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -218,15 +70,6 @@
 
       <!-- Google Sign In Button Container -->
       <div id="g_id_signin_container" class="pt-2 flex justify-center"></div>
-
-      <!-- Dev / Test Token Sign In -->
-      <div class="pt-3 border-t border-gray-100 text-left">
-        <div class="text-[11px] text-gray-400 font-medium mb-1">Developer / Test Token:</div>
-        <div class="flex space-x-2">
-          <input type="email" id="test-login-email" placeholder="e.g. ramu@gmail.com" class="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-lg outline-none focus:ring-1 focus:ring-brand-500">
-          <button onclick="app.loginWithTestToken()" class="px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-semibold hover:bg-brand-700">Sign In</button>
-        </div>
-      </div>
 
       <div id="auth-gate-error" class="hidden text-xs text-red-600 bg-red-50 p-3 rounded-lg border border-red-200 text-left font-medium"></div>
     </div>
@@ -518,47 +361,25 @@
         </button>
       </div>
 
-      <!-- Google Sheets Config -->
+      <!-- Cloud Backup -->
       <div class="space-y-2">
         <div class="flex items-center justify-between">
-          <label for="setting-gsheet-url" class="block text-xs font-semibold text-gray-700">Google Sheets Backup</label>
+          <span class="block text-xs font-semibold text-gray-700">Cloud Sync &amp; Backup</span>
           <div id="gsheet-status" class="flex items-center space-x-1.5">
-            <span id="gsheet-status-dot" class="w-2 h-2 rounded-full bg-gray-400"></span>
-            <span id="gsheet-status-text" class="text-[10px] text-gray-500">Not configured</span>
+            <span id="gsheet-status-dot" class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span id="gsheet-status-text" class="text-[10px] text-emerald-600 font-semibold">Active &amp; Connected</span>
           </div>
         </div>
-        <input type="url" id="setting-gsheet-url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
-        <div>
-          <label for="setting-google-client-id" class="block text-xs font-semibold text-gray-700 mt-2 mb-1">Google OAuth Client ID (Optional for Live Google Sign-In)</label>
-          <input type="text" id="setting-google-client-id" placeholder="e.g. 123456789-xxxx.apps.googleusercontent.com" class="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
-        </div>
-        <p class="text-[10px] text-gray-500">Your orders are also backed up to your Google Sheet, so they are not dependent only on this browser/device. You remain responsible for your Google account.</p>
-
-        <details class="text-[10px] text-gray-500 mt-1">
-          <summary class="cursor-pointer font-semibold text-gray-600 hover:text-gray-800">How to set up Google Sheets backup</summary>
-          <ol class="list-decimal ml-4 mt-1.5 space-y-1 text-gray-600 leading-relaxed">
-            <li>Open <strong>Google Sheets</strong> and create a new spreadsheet (e.g., "Bikri Hub Orders")</li>
-            <li>Go to <strong>Extensions → Apps Script</strong></li>
-            <li>Delete any existing code in <code>Code.gs</code></li>
-            <li>Paste the <strong>Bikri Hub Apps Script</strong> code (provided separately)</li>
-            <li>Click <strong>Deploy → New deployment</strong></li>
-            <li>Select type: <strong>Web app</strong></li>
-            <li>Set "Execute as": <strong>Me</strong></li>
-            <li>Set "Who has access": <strong>Anyone</strong></li>
-            <li>Click <strong>Deploy</strong> and authorize when prompted</li>
-            <li>Copy the <strong>Web App URL</strong> and paste it above</li>
-            <li>Click <strong>Save Settings</strong> — Bikri Hub will offer to push existing orders</li>
-          </ol>
-        </details>
+        <p class="text-[10px] text-gray-500">Your orders are continuously synced to your private cloud storage partition so you never lose data even if you switch devices.</p>
 
         <div class="grid grid-cols-2 gap-2 mt-2">
           <button onclick="app.pushAllOrders()" class="px-3 py-2 border border-gray-300 text-gray-700 text-xs rounded-lg font-medium hover:bg-gray-50 flex items-center justify-center space-x-1">
             <i data-lucide="upload" class="w-3.5 h-3.5"></i>
-            <span>Push All to Sheets</span>
+            <span>Push All to Cloud</span>
           </button>
           <button onclick="app.restoreFromSheets()" class="px-3 py-2 border border-gray-300 text-gray-700 text-xs rounded-lg font-medium hover:bg-gray-50 flex items-center justify-center space-x-1">
             <i data-lucide="download" class="w-3.5 h-3.5"></i>
-            <span>Restore from Sheets</span>
+            <span>Restore from Cloud</span>
           </button>
         </div>
       </div>
@@ -600,7 +421,7 @@
       </div>
 
       <div class="pt-2 flex justify-end">
-        <button onclick="app.saveSettings()" class="px-4 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-semibold">Save Settings</button>
+        <button onclick="app.closeSettingsModal()" class="px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-semibold">Close</button>
       </div>
     </div>
   </div>
@@ -610,9 +431,18 @@
 
   <!-- APP ENGINE LOGIC -->
   <script>
+    // ══════════════════════════════════════════════════════════════════
+    // BIKRI HUB PRODUCTION CONFIGURATION
+    // ══════════════════════════════════════════════════════════════════
+    const BIKRI_CONFIG = {
+      GOOGLE_CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID',
+      APPS_SCRIPT_URL: 'YOUR_APPS_SCRIPT_URL'
+    };
+
     const STORAGE_KEY_ORDERS = 'bikri_hub_orders_v1';
     const STORAGE_KEY_SYNC_QUEUE = 'bikri_hub_sync_queue_v2';
     const STORAGE_KEY_SETTINGS = 'bikri_hub_settings_v1';
+    const STORAGE_KEY_SESSION = 'bikri_hub_session_v1';
 
     const STATUSES = ['PENDING', 'PROCESSING', 'DISPATCHED', 'DELIVERED', 'RETURNED', 'CANCELLED'];
 
@@ -713,7 +543,7 @@
         this.isSubmitting = false;
         this.isSyncing = false;
         this.currentUser = null;
-        this.idToken = localStorage.getItem('bikri_hub_user_token') || '';
+        this.idToken = '';
 
         this.init();
       }
@@ -737,66 +567,125 @@
       loadSettings() {
         try {
           var loadedSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
-          this.settings = loadedSettings ? JSON.parse(loadedSettings) : { googleSheetUrl: '', googleClientId: '' };
+          this.settings = loadedSettings ? JSON.parse(loadedSettings) : {};
         } catch (e) {
-          this.settings = { googleSheetUrl: '', googleClientId: '' };
+          this.settings = {};
+        }
+
+        // Production BIKRI_CONFIG takes precedence over local storage
+        if (BIKRI_CONFIG.APPS_SCRIPT_URL && BIKRI_CONFIG.APPS_SCRIPT_URL !== 'YOUR_APPS_SCRIPT_URL') {
+          this.settings.googleSheetUrl = BIKRI_CONFIG.APPS_SCRIPT_URL;
+        }
+        if (BIKRI_CONFIG.GOOGLE_CLIENT_ID && BIKRI_CONFIG.GOOGLE_CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID') {
+          this.settings.googleClientId = BIKRI_CONFIG.GOOGLE_CLIENT_ID;
         }
       }
 
       // ── Authentication & Gatekeeper ──
       initAuth() {
         var self = this;
-        if (window.google && window.google.accounts && this.settings.googleClientId) {
+        var clientId = this.settings.googleClientId;
+
+        // 1. Initialize official Google Identity Services
+        if (window.google && window.google.accounts && clientId && clientId !== 'YOUR_GOOGLE_CLIENT_ID') {
           try {
             google.accounts.id.initialize({
-              client_id: this.settings.googleClientId,
+              client_id: clientId,
               callback: function(res) { self.handleGoogleCredential(res); }
             });
-            google.accounts.id.renderButton(
-              document.getElementById('g_id_signin_container'),
-              { theme: 'outline', size: 'large', text: 'continue_with', shape: 'pill' }
-            );
+            var container = document.getElementById('g_id_signin_container');
+            if (container) {
+              container.innerHTML = '';
+              google.accounts.id.renderButton(container, {
+                theme: 'outline',
+                size: 'large',
+                text: 'continue_with',
+                shape: 'pill',
+                width: 280
+              });
+            }
           } catch (e) {
-            console.warn('Google Identity Services initialization:', e);
+            console.warn('Google Identity Services initialization warning:', e);
+          }
+        } else if (!clientId || clientId === 'YOUR_GOOGLE_CLIENT_ID') {
+          var container = document.getElementById('g_id_signin_container');
+          if (container) {
+            container.innerHTML = '<div class="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200">Google Client ID pending configuration.<br><span class="font-mono text-[11px]">Set YOUR_GOOGLE_CLIENT_ID in index.html</span></div>';
           }
         }
 
-        if (this.idToken) {
-          this.verifySession();
-        } else {
-          this.lockApp();
+        // 2. Remembered Device / Session Check (0ms Instant App Open)
+        var cachedSessionRaw = localStorage.getItem(STORAGE_KEY_SESSION);
+        if (cachedSessionRaw) {
+          try {
+            var session = JSON.parse(cachedSessionRaw);
+            if (session && session.customer && session.customer.id && session.token) {
+              this.idToken = session.token;
+              // Unlock app instantly (0ms) from local cache like Apple Notes
+              this.unlockApp(session.customer, !!session.isAdmin);
+              // Silently verify license with server in the background
+              this.verifySessionBackground();
+              return;
+            }
+          } catch (e) {
+            console.warn('Session cache read error:', e);
+          }
         }
+
+        // If no cached session, lock app and wait for Google Sign-In
+        this.lockApp();
       }
 
-      loginWithTestToken() {
-        var email = document.getElementById('test-login-email').value.trim();
-        if (!email) {
-          this.showAuthError('Please enter a Gmail address.');
-          return;
-        }
-        this.idToken = 'test:' + email;
-        localStorage.setItem('bikri_hub_user_token', this.idToken);
-        this.verifySession();
-      }
-
-      handleGoogleCredential(response) {
+      async handleGoogleCredential(response) {
         if (!response || !response.credential) return;
         this.idToken = response.credential;
-        localStorage.setItem('bikri_hub_user_token', this.idToken);
-        this.verifySession();
+        await this.verifyAndSignIn(this.idToken);
       }
 
-      async verifySession() {
+      async verifyAndSignIn(token) {
         var errEl = document.getElementById('auth-gate-error');
         if (errEl) errEl.classList.add('hidden');
 
         var url = this.settings.googleSheetUrl;
-        if (!url) {
-          // If Google Sheet backend is not yet linked, unlock in local dev mode
-          var testEmail = (this.idToken.indexOf('test:') === 0 ? this.idToken.substring(5) : 'owner@bikrihub.com');
-          this.unlockApp({ id: 'LOCAL-001', name: testEmail.split('@')[0], email: testEmail, status: 'ACTIVE' }, true);
+        if (!url || url === 'YOUR_APPS_SCRIPT_URL') {
+          this.showAuthError('Backend Google Apps Script URL not configured. Please set YOUR_APPS_SCRIPT_URL in index.html.');
+          this.lockApp();
           return;
         }
+
+        try {
+          var fetchUrl = url + (url.indexOf('?') === -1 ? '?' : '&') + 'action=verify_session&idToken=' + encodeURIComponent(token);
+          var res = await fetch(fetchUrl);
+          var data = await res.json();
+
+          if (data && data.success && data.authorized) {
+            var customer = data.customer || { id: 'CUST-001', name: 'Customer', status: 'ACTIVE' };
+            var isAdmin = !!data.isAdmin;
+
+            // Cache valid session for instant 0ms device opening next time
+            localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify({
+              token: token,
+              customer: customer,
+              isAdmin: isAdmin,
+              savedAt: Date.now()
+            }));
+
+            this.unlockApp(customer, isAdmin);
+          } else {
+            var msg = (data && data.error) ? data.error : 'Access Denied: No active Bikri Hub license found for this Google account.';
+            this.showAuthError(msg);
+            this.lockApp();
+          }
+        } catch (e) {
+          console.error('Session verify error:', e);
+          this.showAuthError('Could not verify license with server. Please check your internet connection.');
+          this.lockApp();
+        }
+      }
+
+      async verifySessionBackground() {
+        var url = this.settings.googleSheetUrl;
+        if (!url || url === 'YOUR_APPS_SCRIPT_URL' || !this.idToken) return;
 
         try {
           var fetchUrl = url + (url.indexOf('?') === -1 ? '?' : '&') + 'action=verify_session&idToken=' + encodeURIComponent(this.idToken);
@@ -804,22 +693,25 @@
           var data = await res.json();
 
           if (data && data.success && data.authorized) {
-            this.unlockApp(data.customer || { id: 'CUST-001', name: 'Customer', status: 'ACTIVE' }, !!data.isAdmin);
+            // Server confirmed active license: update profile cache
+            if (data.customer) {
+              this.currentUser = data.customer;
+              localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify({
+                token: this.idToken,
+                customer: data.customer,
+                isAdmin: !!data.isAdmin,
+                savedAt: Date.now()
+              }));
+              this.updateUserBadge(data.customer, !!data.isAdmin);
+            }
           } else {
-            var msg = (data && data.error) ? data.error : 'Access Denied: No active license registered.';
-            this.showAuthError(msg);
-            this.lockApp();
+            // Customer license was revoked, deactivated, or unauthorized by owner!
+            var reason = (data && data.error) ? data.error : 'Your Bikri Hub license has been deactivated. Please contact support.';
+            this.signOut(reason);
           }
         } catch (e) {
-          console.error('Session verify error:', e);
-          if (this.idToken.indexOf('test:') === 0) {
-            var testMail = this.idToken.substring(5);
-            var isAdm = testMail.indexOf('admin') !== -1 || testMail.indexOf('owner') !== -1;
-            this.unlockApp({ id: 'CUST-DEV', name: testMail.split('@')[0], email: testMail, status: 'ACTIVE' }, isAdm);
-          } else {
-            this.showAuthError('Could not verify license with server. Please check your connection.');
-            this.lockApp();
-          }
+          // Running offline / network hiccup: preserve local Apple Notes experience
+          console.warn('Background license verification offline fallback:', e);
         }
       }
 
@@ -847,10 +739,17 @@
         var overlay = document.getElementById('auth-gate-modal');
         if (overlay) overlay.classList.add('hidden');
 
+        this.updateUserBadge(customer, isAdmin);
+        this.loadLocalData();
+        this.switchTab('dashboard');
+        lucide.createIcons();
+      }
+
+      updateUserBadge(customer, isAdmin) {
         var userBadge = document.getElementById('user-badge');
         var badgeName = document.getElementById('user-badge-name');
         if (userBadge && badgeName) {
-          badgeName.textContent = (customer.name || customer.email) + ' (' + customer.id + ')';
+          badgeName.textContent = (customer.name || customer.email || 'Customer') + ' (' + (customer.id || '') + ')';
           userBadge.classList.remove('hidden');
         }
 
@@ -859,18 +758,17 @@
 
         var signoutBtn = document.getElementById('header-signout-btn');
         if (signoutBtn) signoutBtn.classList.remove('hidden');
-
-        this.loadLocalData();
-        this.switchTab('dashboard');
-        lucide.createIcons();
       }
 
-      signOut() {
+      signOut(reason) {
         this.idToken = '';
         this.currentUser = null;
-        localStorage.removeItem('bikri_hub_user_token');
+        localStorage.removeItem(STORAGE_KEY_SESSION);
         this.lockApp();
-        this.showToast('Signed out successfully', 'info');
+        if (reason) {
+          this.showAuthError(reason);
+        }
+        this.showToast(reason || 'Signed out successfully', reason ? 'error' : 'info');
       }
 
       // ── Data Persistence ──
