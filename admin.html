@@ -85,12 +85,22 @@
           <div>
             <div class="text-xs font-bold text-gray-900">Universal Bikri Hub Customer Link (Send this to all customers):</div>
             <div id="customer-app-url-display" class="text-xs font-mono text-brand-700 font-semibold break-all"></div>
+            <div id="customer-url-missing-warning" class="hidden text-xs text-amber-700 font-semibold flex items-center space-x-1 mt-0.5">
+              <span>⚠️ Vercel Production URL not set.</span>
+              <button onclick="adminApp.promptSetProductionUrl()" class="underline text-brand-600 hover:text-brand-800 ml-1">Click to enter your Vercel URL</button>
+            </div>
           </div>
         </div>
-        <button onclick="adminApp.copyUniversalLink()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 shadow-sm transition flex-shrink-0">
-          <i data-lucide="copy" class="w-3.5 h-3.5"></i>
-          <span>Copy Customer Link</span>
-        </button>
+        <div class="flex items-center space-x-2 flex-shrink-0">
+          <button onclick="adminApp.promptSetProductionUrl()" class="px-3 py-2 border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold flex items-center space-x-1 transition" title="Change or set Vercel production URL">
+            <i data-lucide="globe" class="w-3.5 h-3.5"></i>
+            <span>Set Domain</span>
+          </button>
+          <button onclick="adminApp.copyUniversalLink()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 shadow-sm transition">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>Copy Customer Link</span>
+          </button>
+        </div>
       </div>
 
       <!-- MODAL: ACTIVATION SUCCESS & SHARE -->
@@ -201,7 +211,8 @@
     // ══════════════════════════════════════════════════════════════════
     const BIKRI_CONFIG = {
       GOOGLE_CLIENT_ID: '172897959552-o5jvdkhmv8tnatchmh2tgmvv67cocd1h.apps.googleusercontent.com',
-      APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzhm_Ixkz1ziDMe0wpGRGlfMH8DdyHsGgPpOlFetMguVJtRysVCX3loaI48sGG_yWYWPg/exec'
+      APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzhm_Ixkz1ziDMe0wpGRGlfMH8DdyHsGgPpOlFetMguVJtRysVCX3loaI48sGG_yWYWPg/exec',
+      PRODUCTION_APP_URL: '' // e.g. https://your-bikrihub.vercel.app
     };
 
     class BikriHubAdminApp {
@@ -307,22 +318,92 @@
         if (this.currentUser) {
           document.getElementById('admin-user-email').textContent = this.currentUser.email + ' (Owner)';
         }
-        var appUrlEl = document.getElementById('customer-app-url-display');
-        if (appUrlEl) appUrlEl.textContent = this.getCustomerUrl();
+        this.updateCustomerUrlDisplay();
         lucide.createIcons();
         this.loadCustomers();
       }
 
       getCustomerUrl() {
-        var href = window.location.href;
-        if (href.indexOf('admin.html') !== -1) {
-          return href.replace('admin.html', 'index.html').split('?')[0].split('#')[0];
+        // 1. If running live on HTTPS (e.g. user opens admin.html directly on Vercel)
+        if (window.location.protocol === 'https:' && 
+            !window.location.hostname.includes('localhost') && 
+            !window.location.hostname.includes('127.0.0.1')) {
+          var liveHref = window.location.href;
+          if (liveHref.indexOf('admin.html') !== -1) {
+            return liveHref.replace('admin.html', 'index.html').split('?')[0].split('#')[0];
+          }
+          return window.location.origin + '/index.html';
         }
-        return window.location.origin + '/index.html';
+
+        // 2. If configured in BIKRI_CONFIG.PRODUCTION_APP_URL
+        if (BIKRI_CONFIG.PRODUCTION_APP_URL && BIKRI_CONFIG.PRODUCTION_APP_URL.startsWith('https://')) {
+          var cleanConfig = BIKRI_CONFIG.PRODUCTION_APP_URL.trim().replace(/\/$/, '');
+          return cleanConfig.endsWith('index.html') ? cleanConfig : (cleanConfig + '/index.html');
+        }
+
+        // 3. If stored in localStorage (saved from Admin Portal UI)
+        try {
+          var saved = localStorage.getItem('bikri_hub_production_url');
+          if (saved && saved.startsWith('https://') && !saved.includes('localhost') && !saved.includes('127.0.0.1')) {
+            var sClean = saved.trim().replace(/\/$/, '');
+            return sClean.endsWith('index.html') ? sClean : (sClean + '/index.html');
+          }
+        } catch(e) {}
+
+        // STRICT ENFORCEMENT: Never generate file:/// or localhost!
+        return '';
+      }
+
+      updateCustomerUrlDisplay() {
+        var url = this.getCustomerUrl();
+        var displayEl = document.getElementById('customer-app-url-display');
+        var warnEl = document.getElementById('customer-url-missing-warning');
+        if (url) {
+          if (displayEl) {
+            displayEl.textContent = url;
+            displayEl.classList.remove('hidden');
+          }
+          if (warnEl) warnEl.classList.add('hidden');
+        } else {
+          if (displayEl) displayEl.classList.add('hidden');
+          if (warnEl) warnEl.classList.remove('hidden');
+        }
+      }
+
+      promptSetProductionUrl(callback) {
+        var current = this.getCustomerUrl();
+        var entered = prompt(
+          'Enter your public Vercel production URL (e.g., https://bikri-hub.vercel.app):',
+          current || 'https://'
+        );
+        if (!entered) return;
+        entered = entered.trim();
+        if (!entered.startsWith('http://') && !entered.startsWith('https://')) {
+          entered = 'https://' + entered;
+        }
+        if (entered.startsWith('http://') && !entered.startsWith('https://')) {
+          entered = entered.replace('http://', 'https://');
+        }
+        if (entered.includes('localhost') || entered.includes('127.0.0.1') || entered.startsWith('file:')) {
+          alert('Error: Please enter a public HTTPS URL (e.g. your Vercel domain), not a local file or localhost.');
+          return;
+        }
+        var cleanUrl = entered.replace(/\/$/, '');
+        localStorage.setItem('bikri_hub_production_url', cleanUrl);
+        this.updateCustomerUrlDisplay();
+        this.showToast('Vercel production URL saved!', 'success');
+        if (typeof callback === 'function') callback();
       }
 
       copyUniversalLink() {
         var url = this.getCustomerUrl();
+        if (!url) {
+          var self = this;
+          this.promptSetProductionUrl(function() {
+            self.copyUniversalLink();
+          });
+          return;
+        }
         var self = this;
         navigator.clipboard.writeText(url).then(function() {
           self.showToast('Copied universal customer link to clipboard!', 'success');
@@ -332,12 +413,20 @@
       }
 
       showActivationModal(customer) {
+        var url = this.getCustomerUrl();
+        if (!url) {
+          var self = this;
+          this.promptSetProductionUrl(function() {
+            self.showActivationModal(customer);
+          });
+          return;
+        }
         var modal = document.getElementById('modal-activation-success');
         if (!modal) return;
         document.getElementById('modal-cust-id').textContent = customer.customerId;
         document.getElementById('modal-cust-name').textContent = customer.name;
         document.getElementById('modal-cust-email').textContent = customer.email;
-        document.getElementById('modal-cust-link').value = this.getCustomerUrl();
+        document.getElementById('modal-cust-link').value = url;
         this.activeModalCustomer = customer;
         modal.classList.remove('hidden');
         lucide.createIcons();
@@ -362,10 +451,17 @@
       }
 
       copyWelcomeMessage() {
+        var url = this.getCustomerUrl();
+        if (!url) {
+          var self = this;
+          this.promptSetProductionUrl(function() {
+            self.copyWelcomeMessage();
+          });
+          return;
+        }
         var c = this.activeModalCustomer || {};
         var name = c.name || 'Shopkeeper';
         var email = c.email || 'your registered Gmail';
-        var url = this.getCustomerUrl();
         var self = this;
 
         var message = 'Hi ' + name + ',\n\n' +
