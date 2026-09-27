@@ -84,8 +84,8 @@
         <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium border border-gray-200">v1.0</span>
       </div>
       <div class="flex items-center space-x-2">
-        <button onclick="app.syncGoogleSheets()" title="Sync to Google Sheets" aria-label="Sync to Google Sheets" class="p-2 text-gray-600 hover:text-brand-600 rounded-lg hover:bg-gray-100 relative">
-          <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+        <button id="header-sync-btn" onclick="app.syncGoogleSheets()" title="Sync to Google Sheets" aria-label="Sync to Google Sheets" class="p-2 text-gray-600 hover:text-brand-600 rounded-lg hover:bg-gray-100 relative">
+          <i id="header-sync-icon" data-lucide="refresh-cw" class="w-5 h-5"></i>
           <span id="sync-indicator" class="hidden absolute top-1.5 right-1.5 w-2 h-2 bg-amber-500 rounded-full"></span>
         </button>
         <button onclick="app.openSettingsModal()" title="Settings & Backup" aria-label="Settings & Backup" class="p-2 text-gray-600 hover:text-brand-600 rounded-lg hover:bg-gray-100">
@@ -544,6 +544,8 @@
         this.selectedCodOrders = new Set();
         this.isSubmitting = false;
         this.isSyncing = false;
+        this.isFetching = false;
+        this.autoSyncTimer = null;
         this.currentUser = null;
         this.idToken = '';
 
@@ -730,6 +732,11 @@
               }));
               this.updateUserBadge(data.customer, !!data.isAdmin);
             }
+            // Background cloud sync after session re-verification
+            this.fetchFromCloud(true);
+            if (this.syncQueue.length > 0) {
+              this.triggerAutoSync();
+            }
           } else {
             // Customer license was revoked, deactivated, or unauthorized by owner!
             var reason = (data && data.error) ? data.error : 'Your Bikri Hub license has been deactivated. Please contact support.';
@@ -768,6 +775,12 @@
         this.loadLocalData();
         this.switchTab('dashboard');
         lucide.createIcons();
+
+        // Automatic background cloud sync on app unlock / login
+        this.fetchFromCloud(true);
+        if (this.syncQueue.length > 0) {
+          this.triggerAutoSync();
+        }
       }
 
       updateUserBadge(customer, isAdmin) {
@@ -783,8 +796,14 @@
       }
 
       signOut(reason) {
+        if (this.autoSyncTimer) {
+          clearTimeout(this.autoSyncTimer);
+          this.autoSyncTimer = null;
+        }
         this.idToken = '';
         this.currentUser = null;
+        this.orders = [];
+        this.syncQueue = [];
         localStorage.removeItem(STORAGE_KEY_SESSION);
         this.lockApp();
         if (reason) {
@@ -1492,6 +1511,7 @@
           this.syncQueue.push(entry);
         }
         this.updateSyncIndicator();
+        this.triggerAutoSync();
       }
 
       queueDelete(orderId) {
@@ -1507,23 +1527,49 @@
           this.syncQueue.push(entry);
         }
         this.updateSyncIndicator();
+        this.triggerAutoSync();
       }
 
-      async syncGoogleSheets() {
+      triggerAutoSync() {
+        if (!this.settings.googleSheetUrl || !this.idToken) return;
+        if (this.autoSyncTimer) {
+          clearTimeout(this.autoSyncTimer);
+        }
+        var self = this;
+        this.autoSyncTimer = setTimeout(function() {
+          self.syncGoogleSheets(true);
+        }, 800);
+      }
+
+      setSyncingState(isSyncing) {
+        var syncIcon = document.getElementById('header-sync-icon');
+        if (syncIcon) {
+          if (isSyncing) {
+            syncIcon.classList.add('animate-spin');
+          } else {
+            syncIcon.classList.remove('animate-spin');
+          }
+        }
+        this.updateSheetStatus();
+      }
+
+      async syncGoogleSheets(silent) {
+        silent = !!silent;
         if (!this.settings.googleSheetUrl) {
-          this.showToast('Set Google Sheet URL in Settings first', 'info');
+          if (!silent) this.showToast('Set Google Sheet URL in Settings first', 'info');
           return;
         }
         if (this.syncQueue.length === 0) {
-          this.showToast('Nothing to sync — all data is up to date', 'info');
+          if (!silent) this.showToast('Nothing to sync — all data is up to date', 'info');
           return;
         }
         if (this.isSyncing) {
-          this.showToast('Sync already in progress...', 'info');
+          if (!silent) this.showToast('Sync already in progress...', 'info');
           return;
         }
 
         this.isSyncing = true;
+        this.setSyncingState(true);
 
         var operations = this.syncQueue.map(function(item) {
           if (item.action === 'delete') {
@@ -1535,7 +1581,9 @@
         var payload = { operations: operations, idToken: this.idToken };
 
         try {
-          this.showToast('Syncing ' + operations.length + ' changes...', 'info');
+          if (!silent) {
+            this.showToast('Syncing ' + operations.length + ' changes...', 'info');
+          }
 
           var response = await fetch(this.settings.googleSheetUrl, {
             method: 'POST',
@@ -1544,8 +1592,7 @@
           });
 
           if (!response.ok) {
-            this.showToast('Sync failed (HTTP ' + response.status + ') — your local data is safe', 'error');
-            this.isSyncing = false;
+            if (!silent) this.showToast('Sync failed (HTTP ' + response.status + ') — your local data is safe', 'error');
             return;
           }
 
@@ -1553,8 +1600,7 @@
           try {
             result = await response.json();
           } catch (parseErr) {
-            this.showToast('Sync sent but response was unreadable — changes kept in queue', 'error');
-            this.isSyncing = false;
+            if (!silent) this.showToast('Sync sent but response was unreadable — changes kept in queue', 'error');
             return;
           }
 
@@ -1563,23 +1609,29 @@
               var processedCount = result.processed || operations.length;
               this.syncQueue = [];
               this.saveData();
-              this.showToast('Synced ' + processedCount + ' changes to Google Sheets', 'success');
+              if (!silent) {
+                this.showToast('Synced ' + processedCount + ' changes to Google Sheets', 'success');
+              }
             } else {
-              this.showToast('Sync partially failed (' + result.failed + ' errors) — changes kept for retry', 'error');
+              if (!silent) this.showToast('Sync partially failed (' + result.failed + ' errors) — changes kept for retry', 'error');
             }
           } else {
             var errMsg = (result && result.error) ? result.error : 'Unknown error';
-            this.showToast('Sync error: ' + errMsg + ' — your local data is safe', 'error');
+            if (!silent) this.showToast('Sync error: ' + errMsg + ' — your local data is safe', 'error');
           }
         } catch (e) {
-          console.error('Sync error:', e);
-          this.showToast('Network error — your local data is safe, retry later', 'error');
+          console.warn('Sync error:', e);
+          if (!silent) {
+            this.showToast('Network error — your local data is safe, retry later', 'error');
+          }
+        } finally {
+          this.isSyncing = false;
+          this.setSyncingState(false);
+          this.updateSyncIndicator();
         }
-
-        this.isSyncing = false;
       }
 
-      pushAllOrders() {
+      async pushAllOrders() {
         if (!this.settings.googleSheetUrl) {
           this.showToast('Set Google Sheet URL in Settings first', 'info');
           return;
@@ -1593,7 +1645,95 @@
           self.queueSync(o);
         });
         this.saveData();
-        this.showToast('Queued ' + this.orders.length + ' orders — press the Sync button (↻) to send', 'info');
+        await this.syncGoogleSheets(false);
+      }
+
+      async fetchFromCloud(silent) {
+        silent = !!silent;
+        if (!this.settings.googleSheetUrl || !this.idToken) return;
+        if (this.isFetching) return;
+
+        this.isFetching = true;
+        this.setSyncingState(true);
+
+        try {
+          if (!silent) {
+            this.showToast('Fetching orders from Google Sheets...', 'info');
+          }
+
+          var fetchUrl = this.settings.googleSheetUrl + (this.settings.googleSheetUrl.indexOf('?') === -1 ? '?' : '&') + 'action=fetch&idToken=' + encodeURIComponent(this.idToken);
+          var response = await fetch(fetchUrl);
+
+          if (!response.ok) {
+            if (!silent) this.showToast('Could not connect to Google Sheets (HTTP ' + response.status + ')', 'error');
+            return;
+          }
+
+          var result;
+          try {
+            result = await response.json();
+          } catch (parseErr) {
+            if (!silent) this.showToast('Could not read response from Google Sheets', 'error');
+            return;
+          }
+
+          if (!result || !result.success) {
+            if (!silent) this.showToast('Error: ' + ((result && result.error) || 'unknown'), 'error');
+            return;
+          }
+
+          var imported = result.orders || [];
+          var added = 0, updated = 0, skipped = 0;
+          var self = this;
+
+          // Protect orders that are currently pending in syncQueue from being overwritten by stale cloud data
+          var pendingIds = new Set(this.syncQueue.map(function(q) { return q.orderId; }));
+
+          for (var i = 0; i < imported.length; i++) {
+            var validated = validateOrderForImport(imported[i]);
+            if (!validated) { skipped++; continue; }
+
+            if (pendingIds.has(validated.id)) {
+              continue;
+            }
+
+            var idx = self.orders.findIndex(function(o) { return o.id === validated.id; });
+            if (idx !== -1) {
+              var existingTime = new Date(self.orders[idx].updatedAt || self.orders[idx].createdAt || 0).getTime();
+              var importedTime = new Date(validated.updatedAt || validated.createdAt || 0).getTime();
+              if (isNaN(existingTime)) existingTime = 0;
+              if (isNaN(importedTime)) importedTime = 0;
+
+              if (importedTime > existingTime) {
+                self.orders[idx] = validated;
+                updated++;
+              }
+            } else {
+              self.orders.push(validated);
+              added++;
+            }
+          }
+
+          if (added > 0 || updated > 0) {
+            this.saveData();
+            this.renderCurrentTab();
+          }
+
+          if (!silent) {
+            var msg = 'Restored from Google Sheets: ' + added + ' added, ' + updated + ' updated';
+            if (skipped > 0) msg += ', ' + skipped + ' skipped';
+            this.showToast(msg, 'success');
+          }
+        } catch (e) {
+          console.warn('Restore from Sheets error:', e);
+          if (!silent) {
+            this.showToast('Network error — could not fetch from Google Sheets', 'error');
+          }
+        } finally {
+          this.isFetching = false;
+          this.setSyncingState(false);
+          this.updateSyncIndicator();
+        }
       }
 
       async restoreFromSheets() {
@@ -1604,67 +1744,7 @@
 
         if (!confirm('This will merge orders from your Google Sheet into local storage. Your existing local orders will be preserved. Continue?')) return;
 
-        try {
-          this.showToast('Fetching orders from Google Sheets...', 'info');
-
-          var fetchUrl = this.settings.googleSheetUrl + (this.settings.googleSheetUrl.indexOf('?') === -1 ? '?' : '&') + 'action=fetch&idToken=' + encodeURIComponent(this.idToken);
-          var response = await fetch(fetchUrl);
-
-          if (!response.ok) {
-            this.showToast('Could not connect to Google Sheets (HTTP ' + response.status + ')', 'error');
-            return;
-          }
-
-          var result;
-          try {
-            result = await response.json();
-          } catch (parseErr) {
-            this.showToast('Could not read response from Google Sheets', 'error');
-            return;
-          }
-
-          if (!result || !result.success) {
-            this.showToast('Error: ' + ((result && result.error) || 'unknown'), 'error');
-            return;
-          }
-
-          var imported = result.orders || [];
-          if (imported.length === 0) {
-            this.showToast('No orders found in Google Sheet', 'info');
-            return;
-          }
-
-          var added = 0, updated = 0, skipped = 0;
-          var self = this;
-
-          for (var i = 0; i < imported.length; i++) {
-            var validated = validateOrderForImport(imported[i]);
-            if (!validated) { skipped++; continue; }
-
-            var idx = self.orders.findIndex(function(o) { return o.id === validated.id; });
-            if (idx !== -1) {
-              var existingDate = new Date(self.orders[idx].updatedAt || self.orders[idx].createdAt);
-              var importedDate = new Date(validated.updatedAt || validated.createdAt);
-              if (importedDate > existingDate) {
-                self.orders[idx] = validated;
-                updated++;
-              }
-            } else {
-              self.orders.push(validated);
-              added++;
-            }
-          }
-
-          this.saveData();
-          this.renderCurrentTab();
-
-          var msg = 'Restored from Google Sheets: ' + added + ' added, ' + updated + ' updated';
-          if (skipped > 0) msg += ', ' + skipped + ' skipped';
-          this.showToast(msg, 'success');
-        } catch (e) {
-          console.error('Restore from Sheets error:', e);
-          this.showToast('Network error — could not fetch from Google Sheets', 'error');
-        }
+        await this.fetchFromCloud(false);
       }
 
       openSettingsModal() {
@@ -1686,14 +1766,18 @@
           dot.className = 'w-2 h-2 rounded-full bg-gray-400';
           text.textContent = 'Not configured';
           text.className = 'text-[10px] text-gray-500';
+        } else if (this.isSyncing || this.isFetching) {
+          dot.className = 'w-2 h-2 rounded-full bg-blue-500 animate-pulse';
+          text.textContent = 'Syncing...';
+          text.className = 'text-[10px] text-blue-600 font-semibold';
         } else if (this.syncQueue.length > 0) {
           dot.className = 'w-2 h-2 rounded-full bg-amber-500';
           text.textContent = 'Sync pending (' + this.syncQueue.length + ')';
-          text.className = 'text-[10px] text-amber-600';
+          text.className = 'text-[10px] text-amber-600 font-semibold';
         } else {
           dot.className = 'w-2 h-2 rounded-full bg-emerald-500';
-          text.textContent = 'Connected';
-          text.className = 'text-[10px] text-emerald-600';
+          text.textContent = 'Active & Connected';
+          text.className = 'text-[10px] text-emerald-600 font-semibold';
         }
       }
 
@@ -1916,6 +2000,27 @@
             }
           });
         }
+
+        // Auto-sync when switching tabs/apps or returning online
+        document.addEventListener('visibilitychange', function() {
+          if (document.visibilityState === 'visible' && self.idToken && !self.isSyncing && !self.isFetching) {
+            self.fetchFromCloud(true);
+            if (self.syncQueue.length > 0) {
+              self.triggerAutoSync();
+            }
+          }
+        });
+
+        window.addEventListener('online', function() {
+          if (self.idToken) {
+            if (self.syncQueue.length > 0) {
+              self.triggerAutoSync();
+            }
+            if (!self.isFetching) {
+              self.fetchFromCloud(true);
+            }
+          }
+        });
       }
     }
 
