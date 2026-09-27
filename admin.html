@@ -50,16 +50,6 @@
       <p class="text-xs text-gray-500">Sign in with your Google account to manage Bikri Hub customer licenses.</p>
       
       <div id="google-btn-container" class="flex justify-center pt-2"></div>
-
-      <!-- Quick dev/test login option -->
-      <div id="test-login-box" class="pt-4 border-t border-gray-100 text-left">
-        <div class="text-[11px] text-gray-400 font-medium mb-1">Developer / Test Token:</div>
-        <div class="flex space-x-2">
-          <input type="email" id="test-admin-email" placeholder="owner@gmail.com" class="flex-1 px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg outline-none focus:ring-1 focus:ring-brand-500">
-          <button onclick="adminApp.loginWithTestToken()" class="px-3 py-1.5 bg-gray-800 text-white rounded-lg text-xs font-semibold hover:bg-gray-900">Sign In</button>
-        </div>
-      </div>
-
       <div id="auth-error-msg" class="hidden text-xs text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200 text-left"></div>
     </div>
 
@@ -554,17 +544,6 @@
         });
       }
 
-      loginWithTestToken() {
-        var email = document.getElementById('test-admin-email').value.trim();
-        if (!email) {
-          alert('Please enter an admin email.');
-          return;
-        }
-        this.idToken = 'test:' + email;
-        localStorage.setItem('bikri_hub_admin_token', this.idToken);
-        this.verifyAdminAccess();
-      }
-
       signOut() {
         this.idToken = '';
         this.currentUser = null;
@@ -580,12 +559,6 @@
         var url = this.backendUrl;
 
         if (!url || url === 'YOUR_APPS_SCRIPT_URL') {
-          // If in local test harness without backend URL configured
-          if (this.idToken.startsWith('test:')) {
-            this.currentUser = { email: this.idToken.replace('test:', ''), isAdmin: true };
-            this.showContentView();
-            return;
-          }
           errEl.textContent = 'Google Apps Script URL pending. Please set YOUR_APPS_SCRIPT_URL.';
           errEl.classList.remove('hidden');
           return;
@@ -607,14 +580,8 @@
           }
         } catch (e) {
           console.error('Admin verify error:', e);
-          // If network error in offline test mode, allow local admin inspection
-          if (this.idToken.startsWith('test:')) {
-            this.currentUser = { email: this.idToken.replace('test:', ''), isAdmin: true };
-            this.showContentView();
-          } else {
-            errEl.textContent = 'Could not reach Google Apps Script backend. Check your URL in Settings.';
-            errEl.classList.remove('hidden');
-          }
+          errEl.textContent = 'Could not reach Google Apps Script backend. Check your internet connection.';
+          errEl.classList.remove('hidden');
         }
       }
 
@@ -625,11 +592,7 @@
         var url = this.backendUrl;
 
         if (!url || url === 'YOUR_APPS_SCRIPT_URL') {
-          // Render local mock sample if sheet URL not yet set
-          this.renderCustomersTable([
-            { customerId: 'CUST-001', name: 'Ramu', email: 'ramu@gmail.com', status: 'ACTIVE', date: '27/09/2026' },
-            { customerId: 'CUST-002', name: 'Sita', email: 'sita@gmail.com', status: 'ACTIVE', date: '27/09/2026' }
-          ]);
+          tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-red-500 text-xs">Google Apps Script URL is not configured.</td></tr>';
           return;
         }
 
@@ -698,18 +661,10 @@
         var url = this.backendUrl;
 
         if (!url || url === 'YOUR_APPS_SCRIPT_URL') {
-          // Local fallback simulation
-          var nextId = 'CUST-' + String(this.customers.length + 1).padStart(3, '0');
-          var simCust = { customerId: nextId, name: name, email: email, status: 'ACTIVE', date: new Date().toLocaleDateString() };
-          this.customers.push(simCust);
-          this.renderCustomersTable(this.customers);
-          document.getElementById('cust-name').value = '';
-          document.getElementById('cust-email').value = '';
+          this.showToast('Backend Google Apps Script URL not configured', 'error');
           btn.disabled = false;
           btn.innerHTML = '<i data-lucide="user-plus" class="w-4 h-4"></i><span>Activate Customer</span>';
           lucide.createIcons();
-          this.showToast('Customer added successfully', 'success');
-          this.showActivationModal(simCust);
           return;
         }
 
@@ -751,10 +706,7 @@
         var url = this.backendUrl;
 
         if (!url || url === 'YOUR_APPS_SCRIPT_URL') {
-          var c = this.customers.find(function(item) { return item.customerId === customerId; });
-          if (c) c.status = newStatus;
-          this.renderCustomersTable(this.customers);
-          this.showToast('Customer status set to ' + newStatus, 'info');
+          this.showToast('Backend Google Apps Script URL not configured', 'error');
           return;
         }
 
@@ -812,14 +764,7 @@
         var url = this.backendUrl;
 
         if (!url || url === 'YOUR_APPS_SCRIPT_URL') {
-          var c = this.customers.find(function(item) { return item.customerId === customerId; });
-          if (c) {
-            c.name = name;
-            c.email = email;
-          }
-          this.renderCustomersTable(this.customers);
-          this.closeEditCustomerModal();
-          this.showToast('Customer updated', 'success');
+          this.showToast('Backend Google Apps Script URL not configured', 'error');
           btn.disabled = false;
           btn.innerHTML = '<i data-lucide="check" class="w-3.5 h-3.5"></i><span>Save Changes</span>';
           lucide.createIcons();
@@ -863,12 +808,8 @@
           'Action cannot be undone.';
         if (!confirm(msg)) return;
 
-        var url = this.backendUrl;
-
         if (!url || url === 'YOUR_APPS_SCRIPT_URL') {
-          this.customers = this.customers.filter(function(item) { return item.customerId !== customerId; });
-          this.renderCustomersTable(this.customers);
-          this.showToast('Customer ' + customerId + ' deleted', 'info');
+          this.showToast('Backend Google Apps Script URL not configured', 'error');
           return;
         }
 

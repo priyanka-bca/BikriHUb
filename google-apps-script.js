@@ -52,19 +52,11 @@ function isAdminEmail(email) {
 
 /**
  * Verifies a Google ID Token (JWT) directly with Google's OAuth2 tokeninfo API.
- * Supports testing tokens formatted as "test:<email>" for automated validation.
+ * Cryptographically verified by Google's servers.
  */
 function verifyGoogleToken(idToken) {
   if (!idToken || typeof idToken !== 'string') {
     return { valid: false, error: 'Authentication token is required.' };
-  }
-
-  // Development / automated test harness bypass (test:email)
-  if (idToken.indexOf('test:') === 0) {
-    var testEmail = idToken.substring(5).trim().toLowerCase();
-    if (testEmail) {
-      return { valid: true, email: testEmail, name: testEmail.split('@')[0] };
-    }
   }
 
   try {
